@@ -1,0 +1,64 @@
+@startuml
+title GrafoNet - Diagrama de casos de uso do MVP
+
+left to right direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #294A63
+skinparam ActorBorderColor #294A63
+skinparam ActorFontColor #173247
+skinparam UsecaseBorderColor #294A63
+skinparam UsecaseBackgroundColor #EAF3FA
+skinparam UsecaseFontColor #173247
+skinparam RectangleBorderColor #294A63
+
+actor "Pessoa convidada" as Convidado
+actor "Usuário" as Usuario
+
+rectangle "GrafoNet" {
+  usecase "Criar conta" as UC_CriarConta
+  usecase "Entrar na plataforma" as UC_Entrar
+  usecase "Convidar pessoa" as UC_Convidar
+  usecase "Manter perfil" as UC_Perfil
+  usecase "Gerenciar amizades\nde confiança" as UC_Amizades
+  usecase "Buscar pessoas" as UC_Buscar
+  usecase "Consultar perfil" as UC_Consultar
+  usecase "Visualizar caminho\nde confiança" as UC_Caminho
+}
+
+Convidado -- UC_CriarConta
+
+Usuario -- UC_Entrar
+Usuario -- UC_Convidar
+Usuario -- UC_Perfil
+Usuario -- UC_Amizades
+Usuario -- UC_Buscar
+Usuario -- UC_Consultar
+Usuario -- UC_Caminho
+
+note right of UC_Amizades
+  A amizade só entra no grafo
+  depois de confirmação recíproca.
+  Cada usuário pode ter até
+  10 amizades de confiança.
+end note
+
+note right of UC_Buscar
+  Um perfil relevante pode aparecer
+  mesmo sem caminho conhecido.
+  Nesse caso, o sistema exibe um aviso.
+end note
+
+note right of UC_CriarConta
+  É necessário possuir
+  um convite válido.
+end note
+
+note bottom of Usuario
+  Alunos, alumni e professores usam
+  as mesmas funções principais do MVP.
+end note
+
+@enduml

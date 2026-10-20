@@ -1,0 +1,83 @@
+@startuml
+title GrafoNet - Diagrama de pacotes do backend
+
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam nodesep 160
+skinparam ranksep 140
+skinparam ArrowColor #294A63
+skinparam PackageBorderColor #294A63
+skinparam PackageBackgroundColor #EAF3FA
+skinparam PackageFontColor #173247
+skinparam ClassBorderColor #708898
+skinparam ClassBackgroundColor #F7FAFC
+skinparam ClassFontColor #173247
+skinparam rectangle {
+  BackgroundColor transparent
+  BorderColor transparent
+  FontColor transparent
+}
+
+hide empty members
+allowmixing
+
+package "Busca" as Busca {
+  class Consulta
+  class "Critério de busca"
+  class "Resultado de busca"
+  class "Serviço de busca" <<serviço>>
+}
+
+package "Integração com IA" as IA {
+  class "Interpretador de consulta" <<adaptador>>
+}
+
+package "Grafo e caminhos" as Grafo {
+  class Caminho
+  class "Calculadora de caminhos" <<serviço>>
+}
+
+package "Conexões de confiança" as Conexoes {
+  class "Solicitação de amizade"
+  class Amizade
+}
+
+package "Perfis" as Perfis {
+  class Perfil
+  class Experiência
+}
+
+package "Contas e convites" as Contas {
+  class Usuário
+  class Convite
+}
+
+' Espaçadores transparentes para aumentar a distância entre os blocos.
+rectangle "espaço horizontal" as GapH1
+rectangle "espaço horizontal" as GapH2
+rectangle "espaço\nvertical\nvertical" as GapV1
+rectangle "espaço\nvertical\nvertical" as GapV2
+
+Busca -[hidden]right-> GapH1
+GapH1 -[hidden]right-> Grafo
+Grafo -[hidden]right-> GapH2
+GapH2 -[hidden]right-> IA
+Grafo -[hidden]down-> GapV1
+GapV1 -[hidden]down-> Perfis
+Perfis -[hidden]down-> GapV2
+GapV2 -[hidden]down-> Contas
+
+' Dependências e direções usadas para organizar o desenho.
+Busca .left.> IA
+Busca .right.> Grafo
+Busca .down.> Perfis
+Grafo .down.> Conexoes
+Grafo .down.> Perfis
+Conexoes .left.> Perfis
+Perfis .down.> Contas
+
+@enduml

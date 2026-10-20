@@ -1,0 +1,60 @@
+@startuml
+title GrafoNet - Atividade de busca e visualização do caminho
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #294A63
+skinparam ActivityBorderColor #294A63
+skinparam ActivityBackgroundColor #EAF3FA
+skinparam ActivityFontColor #173247
+skinparam ActivityDiamondBorderColor #294A63
+skinparam ActivityDiamondBackgroundColor #EAF3FA
+skinparam PartitionBorderColor #294A63
+skinparam PartitionFontColor #173247
+
+|Usuário|
+start
+:Acessar a busca;
+:Descrever quem deseja encontrar
+em linguagem natural;
+
+|GrafoNet|
+:Interpretar os critérios da busca;
+:Consultar os perfis autorizados;
+
+if () then ([Há perfis relevantes])
+  :Ordenar e exibir os resultados;
+
+  |Usuário|
+  :Selecionar um perfil;
+
+  |GrafoNet|
+  :Exibir as informações permitidas
+do perfil;
+  :Calcular os caminhos de confiança;
+
+  if () then ([Existe caminho conhecido])
+    :Exibir o caminho mais curto
+ou relevante;
+    :Mostrar as pessoas intermediárias
+e o contexto de cada vínculo;
+  else ([Não existe caminho conhecido])
+    :Exibir o perfil com o aviso
+"Sem caminho conhecido";
+  endif
+
+  |Usuário|
+  :Analisar o perfil e as
+informações apresentadas;
+  stop
+else ([Nenhum perfil relevante])
+  |GrafoNet|
+  :Informar que nenhum perfil
+relevante foi encontrado;
+  :Sugerir a alteração dos
+critérios da busca;
+  stop
+endif
+
+@enduml

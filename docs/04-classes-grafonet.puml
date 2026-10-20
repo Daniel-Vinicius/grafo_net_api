@@ -1,0 +1,123 @@
+@startuml
+!pragma layout smetana
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam nodesep 65
+skinparam ranksep 65
+skinparam ArrowColor #294A63
+skinparam ClassBorderColor #294A63
+skinparam ClassBackgroundColor #EAF3FA
+skinparam ClassFontColor #173247
+skinparam ClassAttributeIconSize 0
+
+hide circle
+
+class Usuario {
+  - id: UUID
+  - emailInsper: String
+  - senhaHash: String
+  - tipo: TipoUsuario
+  - ativo: Boolean
+  + autenticar(senha: String): Boolean
+  + enviarConvite(email: String): Convite
+}
+
+class Convite {
+  - id: UUID
+  - emailConvidado: String
+  - token: String
+  - criadoEm: DateTime
+  - expiraEm: DateTime
+  - status: StatusConvite
+  + estaValido(): Boolean
+  + aceitar(): void
+}
+
+class Perfil {
+  - id: UUID
+  - nome: String
+  - bio: String
+  - curso: String
+  - semestreIngresso: String
+  - areaAtuacao: String
+  - interesses: List<String>
+  + atualizarDados(): void
+}
+
+class Experiencia {
+  - id: UUID
+  - titulo: String
+  - organizacao: String
+  - tipo: String
+  - inicio: Date
+  - fim: Date
+  - descricao: String
+}
+
+class Entidade {
+  - id: UUID
+  - nome: String
+}
+
+class ParticipacaoEntidade {
+  - funcao: String
+  - inicio: Date
+  - fim: Date
+}
+
+class IniciacaoCientifica {
+  - id: UUID
+  - titulo: String
+  - tema: String
+  - inicio: Date
+  - fim: Date
+}
+
+class ConexaoProxima {
+  - id: UUID
+  - status: StatusConexao
+  - solicitadaEm: DateTime
+  - confirmadaEm: DateTime
+  + confirmar(): void
+  + recusar(): void
+}
+
+class ServicoBusca <<serviço>> {
+  + buscar(texto: String): List<Perfil>
+}
+
+class CalculadoraCaminhos <<serviço>> {
+  + calcular(origem: Perfil, destino: Perfil): Caminho
+}
+
+class Caminho {
+  - id: UUID
+}
+
+class EtapaCaminho {
+  - ordem: Integer
+  - tipo: TipoVinculo
+  - contexto: String
+}
+
+Usuario "1" *-right- "1" Perfil : possui
+Usuario "1" -up-> "0..*" Convite : envia
+
+Perfil "1" *-down- "0..*" Experiencia : registra
+Perfil "1" *-down- "0..*" ParticipacaoEntidade
+ParticipacaoEntidade "0..*" -down-> "1" Entidade
+IniciacaoCientifica "0..*" -left-> "2" Perfil : participantes
+
+Perfil "2" -left- "0..10" ConexaoProxima : participa
+
+ServicoBusca .down.> Perfil
+CalculadoraCaminhos .down.> Perfil
+CalculadoraCaminhos .right.> Caminho
+Caminho "1" *-down- "1..*" EtapaCaminho
+EtapaCaminho "0..*" -left-> "2" Perfil : liga
+
+@enduml
