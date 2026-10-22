@@ -1,14 +1,12 @@
 @startuml
-title GrafoNet - Diagrama de pacotes do backend
 
 top to bottom direction
 
 skinparam backgroundColor white
 skinparam shadowing false
-skinparam linetype ortho
 skinparam defaultFontName Arial
-skinparam nodesep 160
-skinparam ranksep 140
+skinparam nodesep 45
+skinparam ranksep 55
 skinparam ArrowColor #294A63
 skinparam PackageBorderColor #294A63
 skinparam PackageBackgroundColor #EAF3FA
@@ -25,35 +23,36 @@ skinparam rectangle {
 hide empty members
 allowmixing
 
-package "Busca" as Busca {
+package "search" as Busca {
   class Consulta
   class "Critério de busca"
   class "Resultado de busca"
   class "Serviço de busca" <<serviço>>
 }
 
-package "Integração com IA" as IA {
+package "ai" as IA {
   class "Interpretador de consulta" <<adaptador>>
 }
 
-package "Grafo e caminhos" as Grafo {
+package "graph" as Grafo {
   class Caminho
   class "Calculadora de caminhos" <<serviço>>
 }
 
-package "Conexões de confiança" as Conexoes {
+package "connections" as Conexoes {
   class "Solicitação de amizade"
   class Amizade
 }
 
-package "Perfis" as Perfis {
+package "profiles" as Perfis {
   class Perfil
   class Experiência
 }
 
-package "Contas e convites" as Contas {
+package "auth" as Contas {
   class Usuário
   class Convite
+  class "Serviço de login" <<serviço>>
 }
 
 ' Espaçadores transparentes para aumentar a distância entre os blocos.
