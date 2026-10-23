@@ -1,8 +1,8 @@
 # GrafoNet API
 
 Backend Flask do GrafoNet. Python 3.14, uv, MongoDB Atlas e módulos por funcionalidade.
-Nesta base, apenas GET /health está implementado. Auth e database contêm
-orientações de implementação, não funcionalidades prontas.
+Inclui health, login com bcrypt/JWT, identidade atual e logout com CSRF.
+A aplicação registra as rotas de autenticação e injeta o repositório MongoDB.
 
 ## Executar no WSL / Linux
 
@@ -11,6 +11,8 @@ Dentro deste repositório, com uv instalado:
 ```bash
 uv python install 3.14
 uv sync --locked
+# Copie .env.example para .env e preencha MONGO_URI, MONGO_DB e JWT_SECRET_KEY.
+# Para HTTP local, defina JWT_COOKIE_SECURE=false.
 uv run flask --app src/app.py:create_app run --debug
 ```
 
@@ -52,4 +54,32 @@ src/
 ## Contrato da API
 
 O contrato inicial está em [docs/api-contract.md](docs/api-contract.md).
-Ele distingue a rota health implementada das rotas propostas para as próximas tarefas.
+Ele documenta cookies, CSRF, logout, campos esperados no MongoDB e decisões de implementação.
+
+O segredo JWT deve ter pelo menos 32 bytes; gere com `openssl rand -hex 32`.
+Para preparar as coleções e índices explicitamente, execute na raiz da API:
+
+```bash
+PYTHONPATH=src uv run python -m database.setup
+```
+
+Os testes não exigem conexão MongoDB nem um .env real. Não há cadastro implementado
+nessa tarefa: o login exige usuário existente com hash bcrypt e conta ativa.
+
+## Validação GN05
+
+Verificado em 23/10/2026:
+
+- `.venv/bin/python -m pytest -q`: **42 passed**.
+- `.venv/bin/pyright`: **0 errors, 0 warnings**.
+- `git diff --check`: sem problemas de espaços.
+
+A cobertura inclui credenciais válidas/incorretas, e-mail inexistente, conta inativa,
+entrada inválida, token ausente/expirado/adulterado/malformado, cookies HttpOnly,
+CSRF ausente/incorreto, logout e perda de acesso, usuário removido/desativado após
+login e registro das rotas com o adaptador MongoDB. Nenhum teste acessa o Atlas;
+a conexão real e um usuário existente devem ser verificados no ambiente configurado.
+
+Para a revisão: conferir as decisões que diferem da proposta inicial no final de
+[docs/api-contract.md](docs/api-contract.md), reproduzir os comandos acima e adicionar
+o link do PR/commit à tarefa. O aceite final depende da reprodução pelo revisor.

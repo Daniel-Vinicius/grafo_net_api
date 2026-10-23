@@ -1,4 +1,15 @@
-"""Próxima tarefa: representar User com dataclass e anotações de tipo.
+from dataclasses import dataclass
 
-Domínio usa tipos Python; não importa Flask, PyMongo
-"""
+
+@dataclass(frozen=True)
+class User:
+    id: str
+    email: str
+    password_hash: str
+    is_active: bool = False
+
+    def to_public(self) -> dict:
+        return {
+            "id": self.id,
+            "email": self.email
+        }
