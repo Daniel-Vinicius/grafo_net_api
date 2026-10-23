@@ -1,7 +1,7 @@
 from app import create_app
 
 def test_health_returns_json() -> None:
-    app = create_app({"TESTING": True})
+    app = create_app({"TESTING": True, "JWT_SECRET_KEY": "health-test-secret-at-least-32-bytes"})
     with app.test_client() as client:
         response = client.get("/health")
     assert response.status_code == 200

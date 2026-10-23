@@ -6,7 +6,9 @@ Não apagar dados.
 
 from pymongo.database import Database
 
-from .connection import client, database
+import os
+from dotenv import load_dotenv
+from .connection import create_database
 
 
 def preparar_banco(db: Database) -> None:
@@ -36,6 +38,9 @@ def preparar_banco(db: Database) -> None:
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    database = create_database(os.getenv("MONGO_URI"), os.getenv("MONGO_DB"))
+    client = database.client
     try:
         client.admin.command("ping")
         preparar_banco(database)
