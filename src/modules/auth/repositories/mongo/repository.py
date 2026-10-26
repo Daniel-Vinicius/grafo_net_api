@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
@@ -11,7 +12,7 @@ class MongoUserRepository:
         self._users = database["users"]
 
     def find_by_email(self, email: str) -> User | None:
-        document = self._users.find_one({"email_normalized": email.strip().lower()})
+        document = self._users.find_one({"email": email.strip().lower()})
         return self._to_user(document)
 
     def find_by_id(self, user_id: str) -> User | None:
@@ -31,3 +32,16 @@ class MongoUserRepository:
             password_hash=document["password_hash"],
             is_active=document.get("is_active") is True,
         )
+
+
+class MongoTokenRepository:
+    def __init__(self, database: Database[dict[str, Any]]):
+        self._tokens = database["revoked_tokens"]
+
+    def revoke(self, jti: str, expires_at: datetime) -> None:
+        self._tokens.update_one(
+            {"_id": jti}, {"$set": {"expires_at": expires_at}}, upsert=True,
+        )
+
+    def is_revoked(self, jti: str) -> bool:
+        return self._tokens.find_one({"_id": jti}, {"_id": 1}) is not None
