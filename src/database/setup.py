@@ -1,49 +1,52 @@
-"""Próxima tarefa: comando explícito para preparar as coleções e índices.
+import argparse
+import os
+from pathlib import Path
+import sys
+from typing import Any
 
-Importar schemas dos módulos, criar coleções ausentes e índices declarados.
-Não apagar dados. 
-"""
-
+from dotenv import load_dotenv
 from pymongo.database import Database
 
-import os
-from dotenv import load_dotenv
-from .connection import create_database
+# A execução direta precisa incluir src para resolver os imports do projeto.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from database.connection import create_database
+from modules.auth.repositories.mongo.schema import (
+    INVITE_INDEXES, INVITE_VALIDATOR, TOKEN_INDEXES, USER_INDEXES, USER_VALIDATOR,
+)
 
 
-def preparar_banco(db: Database) -> None:
-    colecoes_necessarias = (
-        "users",
-        "invites",
-        "connections",
-        "entities",
-        "research_projects",
-    )
+def preparar_banco(db: Database[dict[str, Any]]) -> None:
+    validators = {"users": USER_VALIDATOR, "invites": INVITE_VALIDATOR}
+    collections = ("users", "revoked_tokens", "invites", "connections", "entities", "research_projects")
+    existing = set(db.list_collection_names())
+    for name in collections:
+        if name in validators:
+            options = {"validator": validators[name], "validationLevel": "strict", "validationAction": "error"}
+            if name in existing:
+                db.command("collMod", name, **options)
+            else:
+                db.create_collection(name, **options)
+        elif name not in existing:
+            db.create_collection(name)
+    db["users"].create_indexes(USER_INDEXES)
+    db["invites"].create_indexes(INVITE_INDEXES)
+    db["revoked_tokens"].create_indexes(TOKEN_INDEXES)
+    print("Coleções, validações e índices preparados.")
 
 
-    colecoes_existentes = set(db.list_collection_names())
-
-    for nome in colecoes_necessarias:
-        if nome not in colecoes_existentes:
-            db.create_collection(nome)
-            print(f"Coleção criada: {nome}")
-
-    db["users"].create_index(
-        "email_normalized",
-        unique=True,
-        name="users_email_normalized_unique",
-    )
-
-    print("Índice único de email preparado.")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepara o banco sem apagar dados nem criar contas.")
+    parser.parse_args()
+    load_dotenv()
+    database = create_database(os.getenv("MONGO_URI"), os.getenv("MONGO_DB"))
+    try:
+        database.client.admin.command("ping")
+        preparar_banco(database)
+    finally:
+        database.client.close()
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    database = create_database(os.getenv("MONGO_URI"), os.getenv("MONGO_DB"))
-    client = database.client
-    try:
-        client.admin.command("ping")
-        preparar_banco(database)
-        print("Preparação do banco concluída.")
-    finally:
-        client.close()
+    main()

@@ -12,7 +12,7 @@ def create_database(uri: str | None, name: str | None) -> Database[dict[str, Any
     if not uri or not name:
         raise ValueError("MONGO_URI e MONGO_DB devem ser definidos no .env")
     client: MongoClient[dict[str, Any]] = MongoClient(
-        uri, serverSelectionTimeoutMS=5000, connect=False
+        uri, serverSelectionTimeoutMS=5000, connect=False, tz_aware=True
     )
     return client[name]
 
