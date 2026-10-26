@@ -22,6 +22,11 @@ USER_VALIDATOR: dict[str, Any] = {
                 "description": "Hash bcrypt em texto; nunca a senha original.",
             },
             "is_active": {"bsonType": "bool"},
+            "profile": {
+                "bsonType": "object",
+                "required": ["name"],
+                "properties": {"name": {"bsonType": "string", "minLength": 1, "maxLength": 100}},
+            },
         },
     }
 }
@@ -38,3 +43,22 @@ USER_INDEXES = [
 TOKEN_INDEXES = [
     IndexModel("expires_at", expireAfterSeconds=0, name="revoked_tokens_expiry"),
 ]
+
+
+INVITE_VALIDATOR: dict[str, Any] = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["_id", "email", "token_hash", "created_by", "created_at", "expires_at", "used_at"],
+        "properties": {
+            "_id": {"bsonType": "string"},
+            "email": {"bsonType": "string", "minLength": 1},
+            "token_hash": {"bsonType": "string", "pattern": "^[a-f0-9]{64}$"},
+            "created_by": {"bsonType": ["string", "null"]},
+            "created_at": {"bsonType": "date"},
+            "expires_at": {"bsonType": "date"},
+            "used_at": {"bsonType": ["date", "null"]},
+        },
+    },
+}
+
+INVITE_INDEXES = [IndexModel("token_hash", unique=True, name="invites_token_hash_unique")]

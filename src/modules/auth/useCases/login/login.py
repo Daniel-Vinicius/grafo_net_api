@@ -1,6 +1,6 @@
 from datetime import datetime
 
-import bcrypt
+from modules.auth.passwords import check_password
 from modules.auth.repositories.contract import TokenRepository, UserRepository
 
 class AuthUseCase:
@@ -13,12 +13,7 @@ class AuthUseCase:
         if user is None:
             raise ValueError("Usuario ou Senha inválidas")
 
-        try:
-            valid_password = bcrypt.checkpw(
-                password.encode("utf-8"), user.password_hash.encode("utf-8")
-            )
-        except ValueError:
-            valid_password = False
+        valid_password = check_password(password, user.password_hash)
         if not valid_password:
             raise ValueError("Usuario ou Senha inválidas")
 

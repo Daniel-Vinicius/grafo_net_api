@@ -1,5 +1,7 @@
 from dataclasses import replace
 from datetime import timedelta
+from unittest.mock import Mock
+from urllib.parse import parse_qs, urlsplit
 
 import bcrypt
 from flask import Flask
@@ -7,10 +9,15 @@ from flask_jwt_extended import create_access_token, decode_token
 import jwt
 import pytest
 
+from pymongo.errors import ServerSelectionTimeoutError
+
 from app import create_app
+from modules.auth.domain.errors import EmailDeliveryError
+from modules.auth.domain.invite import token_hash
+from modules.auth.email import EmailSender
 from config import configure_app
 from modules.auth.domain.user import User
-from modules.auth.repositories.in_memory.repository import InMemoryTokenRepository, InMemoryUserRepository
+from modules.auth.repositories.in_memory.repository import InMemoryInviteRepository, InMemoryTokenRepository, InMemoryUserRepository
 from modules.auth.routes.routes import create_auth_routes
 
 
@@ -24,8 +31,9 @@ def auth():
         "TESTING": True,
         "JWT_SECRET_KEY": "auth-test-only-secret-at-least-32-bytes",
     })
+    users = InMemoryUserRepository(records)
     app.register_blueprint(create_auth_routes(
-        app, InMemoryUserRepository(records), InMemoryTokenRepository(),
+        app, users, InMemoryTokenRepository(), InMemoryInviteRepository(users),
     ))
     return app, app.test_client(), records, password
 
@@ -128,3 +136,115 @@ def test_logout_revokes_only_the_presented_token(auth):
     assert client.get("/api/auth/me", headers=first_headers).status_code == 401
     assert client.post("/api/auth/logout", headers=first_headers).status_code == 401
     assert client.get("/api/auth/me", headers=second_headers).status_code == 200
+
+
+@pytest.fixture
+def signup():
+    app = Flask(__name__)
+    configure_app(app, {
+        "TESTING": True, "JWT_SECRET_KEY": "route-test-secret-at-least-32-bytes",
+        "BOOTSTRAP_KEY": "b" * 32, "FRONTEND_URL": "http://localhost:5173",
+    })
+    users = InMemoryUserRepository([])
+    invites = InMemoryInviteRepository(users)
+    mailer = Mock(spec=EmailSender)
+    app.register_blueprint(create_auth_routes(app, users, InMemoryTokenRepository(), invites, mailer))
+    return app.test_client(), users, invites, mailer
+
+
+def invitation_token(mailer):
+    link = mailer.send_invite.call_args.args[1]
+    return parse_qs(urlsplit(link).query)["token"][0]
+
+
+def test_invite_register_login_and_authenticated_invite(signup):
+    client, users, invites, mailer = signup
+    email = "Pessoa@AL.INSPER.EDU.BR"
+    assert client.post("/api/invitations", json={"email": email}).status_code == 401
+    issued = client.post("/api/invitations", json={"email": email}, headers={"X-Bootstrap-Key": "b" * 32})
+    assert issued.status_code == 201
+    token = invitation_token(mailer)
+    assert token not in issued.get_data(as_text=True)
+    assert "token_hash" not in issued.json
+    assert client.get("/api/auth/register", query_string={"token": token}).status_code == 405
+    assert invites.find_by_hash(token_hash(token)).used_at is None
+    data = {"name": " Pessoa ", "email": email, "password": " senha1234 ", "invite_token": token}
+    created = client.post("/api/auth/register", json=data)
+    assert created.status_code == 201
+    assert set(created.json) == {"id", "email"}
+    assert created.json["email"] == email.lower()
+    assert "Set-Cookie" not in created.headers
+    user = users.find_by_id(created.json["id"])
+    assert user.profile.name == "Pessoa" and user.is_active
+    login = client.post("/api/auth/login", json={"email": email, "password": data["password"]})
+    assert login.status_code == 200
+    headers = {"Authorization": "Bearer " + login.json["access_token"]}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    second = client.post("/api/invitations", json={"email": "outra@insper.edu.br"}, headers=headers)
+    assert second.status_code == 201
+    assert invites.find_by_hash(token_hash(invitation_token(mailer))).created_by == user.id
+    assert client.post("/api/invitations", json={"email": "terceira@insper.edu.br"},
+        headers={"X-Bootstrap-Key": "b" * 32}).status_code == 403
+    assert client.post("/api/auth/register", json=data).status_code == 400
+    assert client.post("/api/auth/logout", headers=headers).status_code == 204
+    assert client.post("/api/invitations", json={"email": "terceira@insper.edu.br"}, headers=headers).status_code == 401
+
+
+def test_invalid_jwt_cannot_fall_back_to_bootstrap(signup):
+    client, _users, _invites, mailer = signup
+    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"}, headers={
+        "Authorization": "Bearer invalid", "X-Bootstrap-Key": "b" * 32,
+    })
+    assert response.status_code == 401
+    mailer.send_invite.assert_not_called()
+
+
+@pytest.mark.parametrize("path", ["/api/invitations", "/api/auth/register"])
+@pytest.mark.parametrize("data", [None, [], "text"])
+def test_signup_routes_reject_non_object_json(signup, path, data):
+    client, _users, _invites, _mailer = signup
+    assert client.post(path, json=data, headers={"X-Bootstrap-Key": "b" * 32}).status_code == 400
+
+
+def test_failed_smtp_returns_503_without_leaving_an_invite(signup):
+    client, users, invites, mailer = signup
+    mailer.send_invite.side_effect = EmailDeliveryError("SMTP indisponível")
+    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+        headers={"X-Bootstrap-Key": "b" * 32})
+    assert response.status_code == 503
+    assert not users.has_any() and not invites._invites
+
+
+def test_database_failure_returns_503_without_sending_email(signup, monkeypatch):
+    client, _users, invites, mailer = signup
+
+    def unavailable(invite):
+        raise ServerSelectionTimeoutError("Detalhe interno que não deve ser exposto")
+
+    monkeypatch.setattr(invites, "save", unavailable)
+    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+        headers={"X-Bootstrap-Key": "b" * 32})
+    assert response.status_code == 503
+    assert "Detalhe interno" not in response.get_data(as_text=True)
+    mailer.send_invite.assert_not_called()
+
+
+def test_duplicate_email_returns_409_and_preserves_second_invite(signup):
+    client, _users, invites, mailer = signup
+    for _ in range(2):
+        assert client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+            headers={"X-Bootstrap-Key": "b" * 32}).status_code == 201
+    first_link = mailer.send_invite.call_args_list[0].args[1]
+    first_token = parse_qs(urlsplit(first_link).query)["token"][0]
+    second_token = invitation_token(mailer)
+    data = {"name": "Pessoa", "email": "a@insper.edu.br", "password": "senha1234", "invite_token": first_token}
+    assert client.post("/api/auth/register", json=data).status_code == 201
+    data["invite_token"] = second_token
+    assert client.post("/api/auth/register", json=data).status_code == 409
+    assert invites.find_by_hash(token_hash(second_token)).used_at is None
+
+
+@pytest.mark.parametrize("key", ["", "short"])
+def test_rejects_short_bootstrap_key(key):
+    with pytest.raises(ValueError, match="BOOTSTRAP_KEY"):
+        configure_app(Flask(__name__), {"JWT_SECRET_KEY": "s" * 32, "BOOTSTRAP_KEY": key})
