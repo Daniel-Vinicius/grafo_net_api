@@ -39,7 +39,7 @@ package "graph" as Grafo {
   class "Caminho (Path)" as Caminho
   class Edge
   interface ProfileRepository
-  class NetworkProfile <<visão pública>>
+  class Catalogs <<catálogos auxiliares>>
 }
 
 package "connections" as Conexoes {
@@ -59,7 +59,9 @@ Grafo ..> Conexoes : amizades aceitas
 Grafo ..> Contas : perfis e participações
 Conexoes ..> Contas : identidade e atividade
 GeminiEmbeddings ..|> EmbeddingProvider
-User *-- Profile : JSON embutido
+User "1" -- "1" Profile : profiles._id = users._id
+ProfileRepository ..> Profile : modelo compartilhado
+IndexProfilesUseCase ..> Profile : campos permitidos
 
 note bottom of Busca
   Gemini gera vetores; comparação é local.

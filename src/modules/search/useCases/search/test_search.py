@@ -3,7 +3,8 @@ from dataclasses import replace
 import pytest
 
 from modules.connections.domain.errors import NetworkError
-from modules.graph.domain.profile import Catalogs, NetworkProfile as Profile
+from modules.graph.domain.catalogs import Catalogs
+from test_profiles import make_profile
 from modules.graph.repositories.in_memory.repository import InMemoryProfileRepository
 from modules.graph.useCases.buildGraph.buildGraph import build_graph
 from modules.search.repositories.in_memory.repository import InMemoryEmbeddingRepository
@@ -31,7 +32,7 @@ def test_modes_cutoff_pagination_isolation_and_intermediaries(indexed_profiles):
 
 
 def test_one_query_embedding_for_1000_preindexed_profiles(embedding_provider):
-    profiles = [Profile(str(i), f"Pessoa {i}") for i in range(1000)]
+    profiles = [make_profile(str(i), f"Pessoa {i}") for i in range(1000)]
     reader, repository, provider = InMemoryProfileRepository(profiles), InMemoryEmbeddingRepository(), embedding_provider
     index = IndexProfilesUseCase(reader, repository, provider)
     assert index.refresh()["indexed"] == 1000

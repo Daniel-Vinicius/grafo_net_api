@@ -3,7 +3,8 @@ import math
 import pytest
 
 from modules.connections.domain.connection import Connection
-from modules.graph.domain.profile import Catalogs, NetworkProfile as Profile
+from modules.graph.domain.catalogs import Catalogs
+from test_profiles import make_profile
 from modules.graph.repositories.in_memory.repository import InMemoryProfileRepository
 from modules.graph.useCases.buildGraph.buildGraph import build_graph
 from modules.search.embeddings import EmbeddingUnavailable
@@ -37,7 +38,7 @@ class FakeEmbeddings:
 
 @pytest.fixture
 def indexed_profiles():
-    profiles = [Profile(key, name) for key, name in
+    profiles = [make_profile(key, name) for key, name in
                 (("me", "Você"), ("a", "Ana"), ("b", "Bruno"), ("c", "Carla"), ("d", "Diego"))]
     reader = InMemoryProfileRepository(profiles)
     repository, provider = InMemoryEmbeddingRepository(), FakeEmbeddings()

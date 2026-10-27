@@ -259,8 +259,51 @@ Conflitos resolvidos preservando conexões, grafo, busca e CORS. Os endpoints us
 e amizade na mesma transação. A rede lê a coleção `profiles`; auth usa a extensão
 `auth_profile_repository`, separada do leitor público `profile_repository`.
 Edição de perfil/pesquisa atualiza a indexação; exclusão limpa conexões e o vetor.
-Após integrar, reindexe os perfis para o novo formato de texto (versão 2).
+Após integrar, reindexe os perfis para o novo formato de texto (versão 3).
 
 Validação da integração: **189 testes passaram, sem skips**, incluindo MongoDB
 real local isolado; Pyright terminou com zero erros e avisos. Não houve reset no
 banco da aplicação nem chamadas ao Gemini real durante os testes.
+
+
+### Perfil único para cadastro, grafo e busca
+
+`src/modules/auth/domain/profile.py` é a única definição de `Profile`.
+Auth, grafo e busca usam a mesma classe e os documentos da coleção `profiles`.
+`Catalogs` fica em `graph/domain/catalogs.py`. Curso e área persistem somente seus
+ids; os nomes são resolvidos pelos catálogos. Metadados opcionais preservam turma,
+ingresso, cargo, empresa, experiências e participações, sem alterar os formulários.
+Detalhes de participação dependem dos vínculos oficiais: remover um id também
+remove seus detalhes atomicamente. Perfis ausentes/inválidos são registrados no
+log e excluídos de grafo/busca até correção, sem fabricar documentos incompletos.
+
+As serializações do próprio perfil e da rede são explícitas e distintas, com os
+contratos HTTP anteriores preservados. A foto continua privada, sem entrar nas
+respostas da rede ou no texto enviado ao provedor de embeddings. A indexação usa
+uma lista explícita de campos, incluindo os nomes dos catálogos e somente os
+metadados permitidos. Não há interesses.
+
+Para aplicar o schema ampliado, execute a preparação habitual **sem o flag de
+reset**, depois reindexe os vetores anteriores (versões 1 e 2):
+
+```bash
+uv run python src/database/setup.py
+uv run flask --app src/app.py:create_app reindex-profiles
+```
+
+A preparação usa `collMod` nas coleções existentes e não apaga dados. Metadados
+opcionais ausentes são carregados vazios. A indexação usa `text_version=3`;
+vetores antigos são desconsiderados até serem atualizados, mesmo se seu hash for
+igual. A reindexação precisa de `GEMINI_API_KEY`; falhas ficam pendentes e podem
+ser repetidas com o mesmo comando. Não executamos preparação nem reindexação no
+banco da aplicação nesta refatoração. Detalhes em [network-api.md](docs/network-api.md).
+
+
+Validação da unificação em 27/10/2026: **195 testes backend passaram, sem skips**,
+com MongoDB 7 dedicado em replica set, bancos temporários removidos ao final e
+provedor de embeddings falso. Os testes incluem o fluxo HTTP com banco real,
+round-trip de metadados, remoção atômica de detalhes junto aos vínculos, defaults
+para documentos existentes, identidade da classe e ausência de dados privados
+no texto e nas respostas. **Pyright: zero erros e avisos**. No frontend, sem
+alterações: **21 testes passaram**, lint e build concluídos. Nenhum reset no banco
+da aplicação, execução de Gemini real ou alteração dos contratos do frontend.

@@ -17,8 +17,13 @@ e-mail não são enviados à busca, ao Gemini ou às respostas da rede.
 
 Os dados acadêmicos ficam em `profiles`, com `_id` igual ao usuário, e não mais
 em `users.profile`. O adaptador de rede consulta ids de usuários ativos e lê uma
-projeção explícita de nome, curso, semestre, área, bio, entidades e pesquisas.
-E-mail, senha, versão de sessão e referência de foto privada não entram nessa visão.
+projeção dos campos da classe canônica `modules.auth.domain.profile.Profile`.
+Os repositórios de auth e rede retornam exatamente essa classe, da mesma coleção.
+Credenciais e versão de sessão ficam exclusivamente em `User`. A referência
+`photo_id` faz parte do modelo, mas é omitida das respostas públicas e dos embeddings.
+Usuários ativos sem documento em `profiles`, ou com perfil inválido, são registrados
+no log e excluídos do grafo e da busca até que a inconsistência seja corrigida;
+não há criação de perfis vazios durante a leitura.
 
 O perfil acadêmico é, por exemplo:
 
@@ -35,27 +40,46 @@ O perfil acadêmico é, por exemplo:
 }
 ```
 
-O leitor resolve curso e área pelos catálogos e converte os ids para a estrutura
-de participações usada pela indexação. `entities` fornece nomes;
+`course_id` e `field_id` são os valores oficiais; as propriedades calculadas
+`course` e `field` resolvem os nomes pelos catálogos de auth, sem persistir cópias.
+`entity_ids` e `research_project_ids` são os vínculos oficiais. A indexação os usa
+diretamente, inclusive para reindexação filtrada por entidade/pesquisa.
+`entities` fornece nomes;
 `research_projects` fornece título e descrição. O semestre atual não equivale a
 semestre de ingresso. Vínculos simples de entidade/pesquisa não comprovam período
 de participação, turma ou orientação confirmada: o grafo mantém suas regras de
 validação e não inventa essas informações. As regras de contextos do domínio
 continuam disponíveis quando os dados necessários são fornecidos ao grafo.
 
-O DTO `NetworkProfile` continua separado de `auth.domain.Profile`, preservando os
-contratos públicos de `/graph` e `/search`. Foto não é disponibilizada por essas
-rotas: `photo_url` permanece vazio e o download exige a autenticação do dono.
+A mesma classe `Profile` é usada no cadastro, edição, persistência, grafo e busca.
+`to_public()` preserva explicitamente o JSON do próprio perfil;
+`to_network_public()` preserva os contratos públicos de `/graph` e `/search`.
+Foto não é disponibilizada por essas rotas: `photo_url` permanece vazio e o
+download exige a autenticação do dono. Não há campo de interesses.
+
+Os metadados opcionais são `type`, `entry_year`, `entry_semester`, `class_group`,
+`role`, `company`, `experiences`, `entity_memberships` e `research_participations`.
+Não foram adicionados aos formulários nem aos campos aceitos pelo PATCH pessoal.
+Os detalhes de participação exigem `entity_id`/`project_id` presentes nos vínculos
+oficiais; remover um vínculo remove seus detalhes na mesma escrita/transação.
+Ausência de metadados em documentos existentes equivale a valores vazios.
+Os catálogos auxiliares de entidades/pesquisas usam `graph.domain.catalogs.Catalogs`.
+
+O texto pesquisável seleciona explicitamente os campos pessoais/acadêmicos e os
+campos permitidos de experiências, participações e catálogos. Não serializa o
+objeto inteiro e não inclui foto, indicador de onboarding, ids operacionais de
+participação ou identidade do orientador.
 
 Cadastro, edição de perfil e vínculo/criação de pesquisa notificam `profile_saved`
 após persistir os dados. Edição de pesquisa notifica `project_saved`, reindexando
 os perfis vinculados. Falha externa deixa indexação pendente sem desfazer o perfil;
 o hash dos dados impede servir vetores desatualizados. A versão do texto passa a
-2, exigindo reindexação dos vetores anteriores. A exclusão de conta remove o vetor
+3, exigindo reindexação dos vetores anteriores (incluindo os de versão 2). A exclusão de conta remove o vetor
 e as conexões da conta, preservando os projetos compartilhados sem criador.
 
 As extensões Flask têm responsabilidades distintas: `auth_profile_repository`
-serve edição pessoal e fotos; `profile_repository` é a projeção pública da rede.
+serve edição pessoal e fotos; `profile_repository` fornece leitura da rede.
+Ambos carregam a classe canônica, com serialização pública somente na saída.
 
 ## Conexões e cadastro por convite
 

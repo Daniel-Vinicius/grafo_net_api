@@ -168,3 +168,51 @@ def test_explicit_reset_preserves_unrelated_collections_and_reseeds(database):
     preparar_banco(database)
     preparar_banco(database)
     assert database.entities.count_documents({}) == 11
+
+
+def test_canonical_profile_metadata_roundtrip_and_link_removal(database):
+    from modules.auth.repositories.mongo.profiles import document
+    from modules.graph.repositories.mongo.repository import MongoProfileRepository as GraphRepository
+    from modules.graph.useCases.buildGraph.buildGraph import build_graph
+    from modules.search.domain.profile_text import searchable_text
+
+    user, original, _ = create_user(database)
+    repository = MongoProfileRepository(database)
+    project = ResearchProject.create(user.id, PROJECT)
+    repository.create_project(user.id, project)
+    profile = replace(original, type="aluno", entry_year=2024, entry_semester=1,
+        class_group="A", role="Analista", company="Empresa", photo_id="PRIVATE_PHOTO",
+        entity_ids=["insper-code"], research_project_ids=[project.id],
+        experiences=({"title": "Estágio", "description": "Dados"},),
+        entity_memberships=({"entity_id": "insper-code", "role": "Diretora", "start_date": "2024-01-01"},),
+        research_participations=({"id": "part", "project_id": project.id,
+            "advisor_user_id": "PRIVATE_ADVISOR", "status": "confirmed"},))
+    database.profiles.replace_one({"_id": user.id}, document(profile))
+    auth_profile = repository.get_profile(user.id)
+    reader = GraphRepository(database)
+    network_profile = next(item for item in reader.list_active() if item.id == user.id)
+    assert type(auth_profile) is type(network_profile) is Profile
+    assert auth_profile == network_profile == profile
+    assert build_graph([network_profile], [], reader.catalogs()).profiles[user.id] is network_profile
+    assert "PRIVATE" not in searchable_text(network_profile, reader.catalogs())
+    edited = repository.patch_profile(user.id, {"bio": "Editada"})
+    assert edited.entity_memberships == profile.entity_memberships
+    assert edited.research_participations == profile.research_participations
+    edited = repository.patch_profile(user.id, {"entity_ids": [], "research_project_ids": []})
+    assert edited.entity_memberships == edited.research_participations == ()
+    assert edited.role == "Analista" and edited.company == "Empresa"
+    assert repository.get_profile(user.id) == edited
+    with pytest.raises(OperationFailure):
+        database.profiles.update_one({"_id": user.id}, {"$set": {"entry_semester": 3}})
+
+
+def test_preexisting_profile_without_optional_metadata_reads_with_empty_defaults(database):
+    from modules.graph.repositories.mongo.repository import MongoProfileRepository as GraphRepository
+    user, profile, _ = create_user(database)
+    keys = ("type", "entry_year", "entry_semester", "class_group", "role", "company",
+            "experiences", "entity_memberships", "research_participations")
+    database.profiles.update_one({"_id": user.id}, {"$unset": dict.fromkeys(keys, "")})
+    assert MongoProfileRepository(database).get_profile(user.id) == profile
+    assert next(item for item in GraphRepository(database).list_active() if item.id == user.id) == profile
+    database.profiles.update_one({"_id": user.id}, {"$set": dict.fromkeys(keys, None)})
+    assert MongoProfileRepository(database).get_profile(user.id) == profile

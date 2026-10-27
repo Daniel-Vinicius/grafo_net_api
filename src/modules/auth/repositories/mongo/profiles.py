@@ -1,9 +1,8 @@
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from gridfs import GridFSBucket, NoFile
-from pymongo import ReturnDocument
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 from pymongo.write_concern import WriteConcern
@@ -22,8 +21,13 @@ def document(value: Profile | ResearchProject) -> dict:
 def profile_from_document(value: dict | None) -> Profile | None:
     if value is None:
         return None
-    data = dict(value)
-    data["id"] = str(data.pop("_id"))
+    allowed = {item.name for item in fields(Profile)}
+    data = {key: item for key, item in value.items() if key in allowed}
+    data["id"] = str(value["_id"])
+    for key in ("experiences", "entity_memberships", "research_participations"):
+        data[key] = tuple(data.get(key) or ())
+    for key in ("type", "class_group", "role", "company"):
+        data[key] = data.get(key) or ""
     return Profile(**data)
 
 
@@ -52,13 +56,12 @@ class MongoProfileRepository:
                 ids = changes.get(field, [])
                 if self._db[collection].count_documents({"_id": {"$in": ids}}, session=session) != len(ids):
                     raise ValidationError("Experiência inexistente")
-            result = self._db.profiles.find_one_and_update(
-                {"_id": user_id}, {"$set": changes}, return_document=ReturnDocument.AFTER, session=session,
-            ) if changes else self._db.profiles.find_one({"_id": user_id}, session=session)
-            profile = profile_from_document(result)
+            profile = profile_from_document(self._db.profiles.find_one({"_id": user_id}, session=session))
             if profile is None:
                 raise NotFoundError("Perfil não encontrado")
-            return profile
+            updated = profile.with_changes(changes)
+            self._db.profiles.replace_one({"_id": user_id}, document(updated), session=session)
+            return updated
         return self._transaction(update)
 
     def list_entities(self) -> list[dict]:

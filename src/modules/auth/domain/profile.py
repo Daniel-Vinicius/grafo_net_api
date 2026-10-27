@@ -1,5 +1,6 @@
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field as data_field, replace
 from datetime import date
+from typing import Any
 from uuid import uuid4
 
 from modules.auth.domain.errors import ValidationError
@@ -57,13 +58,76 @@ class Profile:
     field_id: str
     bio: str
     photo_id: str | None = None
-    entity_ids: list[str] = field(default_factory=list)
-    research_project_ids: list[str] = field(default_factory=list)
+    entity_ids: list[str] = data_field(default_factory=list)
+    research_project_ids: list[str] = data_field(default_factory=list)
     experiences_completed: bool = False
 
+    # Optional graph metadata; official links remain the two id arrays above.
+    type: str = ""
+    entry_year: int | None = None
+    entry_semester: int | None = None
+    class_group: str = ""
+    role: str = ""
+    company: str = ""
+    experiences: tuple[dict[str, Any], ...] = ()
+    entity_memberships: tuple[dict[str, Any], ...] = ()
+    research_participations: tuple[dict[str, Any], ...] = ()
+
+    def __post_init__(self) -> None:
+        text(self.name, "Nome", 100)
+        text(self.bio, "Bio", 500)
+        catalog(self.course_id, COURSES, "Curso")
+        catalog(self.field_id, FIELDS, "Área")
+        if not isinstance(self.semester, int) or isinstance(self.semester, bool) or not 1 <= self.semester <= 8:
+            raise ValidationError("Semestre deve ser inteiro de 1 a 8")
+        identifiers(self.entity_ids)
+        identifiers(self.research_project_ids)
+        for key in ("type", "class_group", "role", "company"):
+            if not isinstance(getattr(self, key), str):
+                raise ValidationError("Metadados do perfil inválidos")
+        if self.entry_year is not None and (type(self.entry_year) is not int or self.entry_year < 1):
+            raise ValidationError("Ano de ingresso inválido")
+        if self.entry_semester is not None and (type(self.entry_semester) is not int or self.entry_semester not in (1, 2)):
+            raise ValidationError("Semestre de ingresso inválido")
+        for key in ("experiences", "entity_memberships", "research_participations"):
+            details = getattr(self, key)
+            if not isinstance(details, (tuple, list)) or any(not isinstance(item, dict) for item in details):
+                raise ValidationError("Detalhes de experiências inválidos")
+        for details, key, links in (
+            (self.entity_memberships, "entity_id", self.entity_ids),
+            (self.research_participations, "project_id", self.research_project_ids),
+        ):
+            if any(item.get(key) not in links for item in details):
+                raise ValidationError("Detalhes de participação exigem vínculo no perfil")
+
+    @property
+    def course(self) -> str:
+        return next((item["name"] for item in COURSES if item["id"] == self.course_id), "")
+
+    @property
+    def field(self) -> str:
+        return next((item["name"] for item in FIELDS if item["id"] == self.field_id), "")
+
+    def with_changes(self, changes: dict) -> "Profile":
+        changes = dict(changes)
+        for links, details, key in (("entity_ids", "entity_memberships", "entity_id"),
+                                    ("research_project_ids", "research_participations", "project_id")):
+            if links in changes:
+                changes[details] = tuple(item for item in changes.get(details, getattr(self, details))
+                                         if item.get(key) in changes[links])
+        return replace(self, **changes)
+
     def to_public(self) -> dict:
-        data = asdict(self)
-        return data
+        return {"id": self.id, "name": self.name, "course_id": self.course_id,
+                "semester": self.semester, "field_id": self.field_id, "bio": self.bio,
+                "photo_id": self.photo_id, "entity_ids": self.entity_ids.copy(),
+                "research_project_ids": self.research_project_ids.copy(),
+                "experiences_completed": self.experiences_completed}
+
+    def to_network_public(self) -> dict[str, Any]:
+        return {"id": self.id, "name": self.name, "type": self.type,
+                "course": self.course, "bio": self.bio, "role": self.role,
+                "company": self.company, "photo_url": ""}
 
     @classmethod
     def create(cls, user_id: str, data: object) -> "Profile":

@@ -34,7 +34,7 @@ class InMemoryProfileRepository:
                 raise ValidationError("Entidade inexistente")
             if any(item not in self._projects for item in changes.get("research_project_ids", [])):
                 raise ValidationError("Pesquisa inexistente")
-            updated = replace(profile, **changes)
+            updated = profile.with_changes(changes)
             self._profiles[user_id] = updated
             return updated
 

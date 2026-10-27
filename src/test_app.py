@@ -1,3 +1,4 @@
+from test_profiles import make_profile
 from dataclasses import replace
 from unittest.mock import Mock
 
@@ -14,7 +15,6 @@ from modules.auth.repositories.in_memory.repository import (
 from modules.auth.routes.routes import create_auth_routes
 from modules.connections.domain.connection import Connection
 from modules.connections.routes.routes import create_connections_routes
-from modules.graph.domain.profile import NetworkProfile
 from modules.graph.repositories.in_memory.repository import InMemoryProfileRepository
 from modules.graph.routes.routes import create_graph_routes
 from modules.search.embeddings import EmbeddingUnavailable
@@ -46,7 +46,7 @@ def network():
     users = InMemoryUserRepository([User(key, f"{key}@insper.edu.br", "hash", True) for key in "abc"])
     invites = InMemoryInviteRepository(users)
     app.register_blueprint(create_auth_routes(app, users, InMemoryTokenRepository(), invites, Mock(spec=EmailSender)))
-    profiles = InMemoryProfileRepository([NetworkProfile(key, key) for key in "abc"])
+    profiles = InMemoryProfileRepository([make_profile(key, key) for key in "abc"])
     provider = TestEmbeddings()
     index = IndexProfilesUseCase(profiles, InMemoryEmbeddingRepository(), provider)
     index.refresh()
@@ -146,7 +146,7 @@ def test_registration_hook_runs_after_save_and_index_failure_preserves_user(netw
     now = datetime.now(timezone.utc)
     invites.save(Invite("i", "new@insper.edu.br", token_hash(token), "a", now, now + timedelta(days=1)))
     created = RegisterUseCase(users, invites).register({"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "new@insper.edu.br", "senha1234", token)
-    profiles.profiles.append(NetworkProfile(created["id"], "Nova"))
+    profiles.profiles.append(make_profile(created["id"], "Nova"))
     provider.unavailable = True
     profile_saved(app, created["id"])
     assert users.find_by_id(created["id"]) is not None

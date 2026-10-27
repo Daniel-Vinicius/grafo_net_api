@@ -2,7 +2,8 @@ import math
 from typing import Any
 
 from modules.connections.domain.errors import NetworkError
-from modules.graph.domain.profile import Catalogs, NetworkProfile
+from modules.graph.domain.catalogs import Catalogs
+from modules.auth.domain.profile import Profile
 from modules.graph.domain.graph import NetworkGraph, Path
 from modules.search.embeddings import EmbeddingUnavailable, normalized
 from modules.search.useCases.index.index import IndexProfilesUseCase
@@ -26,7 +27,7 @@ class SearchUseCase:
         tree = graph.paths_from(origin)
         vector = normalized(self.index.provider.query(query.strip()), self.index.provider.dimensions)
         records = self.index.repository.all()
-        candidates: list[tuple[NetworkProfile, float]] = []
+        candidates: list[tuple[Profile, float]] = []
         pending = 0
         for profile in graph.profiles.values():
             if profile.id == origin:
@@ -44,7 +45,7 @@ class SearchUseCase:
             if score >= self.min_score:
                 candidates.append((profile, score))
 
-        def key(item: tuple[NetworkProfile, float]) -> tuple:
+        def key(item: tuple[Profile, float]) -> tuple:
             profile, score = item
             cost = tree.costs.get(profile.id)
             proximity = (cost is None, *(cost or (math.inf, math.inf)))
@@ -58,7 +59,7 @@ class SearchUseCase:
         results = []
         for (profile, score), path in zip(selected, paths, strict=True):
             public_path = path.public() if path else None
-            results.append({"profile": profile.public(), "similarity": score,
+            results.append({"profile": profile.to_network_public(), "similarity": score,
                             "cost": public_path["cost"] if public_path else None,
                             "path": public_path})
         return {"results": results, "total": len(candidates), "mode": mode,

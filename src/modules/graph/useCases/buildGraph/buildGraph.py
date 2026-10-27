@@ -7,7 +7,8 @@ from zoneinfo import ZoneInfo
 
 from modules.connections.domain.connection import Connection
 from modules.connections.repositories.contract import ConnectionRepository
-from modules.graph.domain.profile import Catalogs, NetworkProfile
+from modules.graph.domain.catalogs import Catalogs
+from modules.auth.domain.profile import Profile
 from modules.graph.domain.graph import Edge, NetworkGraph
 from modules.graph.repositories.contract import ProfileRepository
 
@@ -35,7 +36,7 @@ def _date(value: Any) -> date | None:
     return None
 
 
-def build_graph(profiles: list[NetworkProfile], connections: list[Connection],
+def build_graph(profiles: list[Profile], connections: list[Connection],
                 catalogs: Catalogs, today: date | None = None) -> NetworkGraph:
     today = today or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     by_id = {p.id: p for p in profiles}

@@ -113,3 +113,32 @@ ENTITY_VALIDATOR = {"$jsonSchema": {
 PROFILE_INDEXES = [IndexModel("photo_id", sparse=True, name="profiles_photo")]
 PROJECT_INDEXES = [IndexModel("creator_id", name="projects_creator")]
 ENTITY_INDEXES = [IndexModel("name", unique=True, name="entities_name_unique")]
+
+# Optional graph metadata shares the canonical profile document. Existing documents
+# need no reset: absent metadata receives the domain defaults when read.
+_profile_properties = PROFILE_VALIDATOR["$jsonSchema"]["properties"]
+for _key in ("type", "class_group", "role", "company"):
+    _profile_properties[_key] = {"bsonType": ["string", "null"]}
+_profile_properties["entry_year"] = {"bsonType": ["int", "null"], "minimum": 1}
+_profile_properties["entry_semester"] = {"bsonType": ["int", "null"], "enum": [1, 2, None]}
+
+
+def participation_schema(reference: str | None, extra: tuple[str, ...]) -> dict:
+    properties = {key: {"bsonType": ["string", "null"]} for key in (
+        "role", "start_date", "end_date", *extra,
+    )}
+    if reference:
+        properties[reference] = string()
+    return {"bsonType": ["array", "null"], "items": {
+        "bsonType": "object", "additionalProperties": False,
+        **({"required": [reference]} if reference else {}), "properties": properties,
+    }}
+
+
+_profile_properties["experiences"] = participation_schema(None, (
+    "id", "title", "organization", "type", "description",
+))
+_profile_properties["entity_memberships"] = participation_schema("entity_id", ("id", "status"))
+_profile_properties["research_participations"] = participation_schema("project_id", (
+    "id", "advisor_user_id", "status",
+))

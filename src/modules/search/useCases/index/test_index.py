@@ -3,7 +3,8 @@ from dataclasses import replace
 import pytest
 
 from modules.connections.domain.errors import NetworkError
-from modules.graph.domain.profile import Catalogs, NetworkProfile as Profile
+from modules.graph.domain.catalogs import Catalogs
+from test_profiles import make_profile
 from modules.graph.repositories.in_memory.repository import InMemoryProfileRepository
 from modules.graph.useCases.buildGraph.buildGraph import build_graph
 from modules.search.repositories.in_memory.repository import InMemoryEmbeddingRepository
@@ -15,7 +16,7 @@ from modules.search.domain.profile_text import searchable_text
 def test_index_hash_invalidation_failure_recovery_and_no_photo_invalidation(indexed_profiles):
     reader, repository, provider, index, graph = indexed_profiles
     assert index.refresh() == {"indexed": 0, "unchanged": 5, "pending": 0}
-    reader.profiles[1] = replace(reader.profiles[1], photo_url="new-photo")
+    reader.profiles[1] = replace(reader.profiles[1], photo_id="new-photo")
     assert index.refresh(user_id="a")["unchanged"] == 1
     reader.profiles[1] = replace(reader.profiles[1], bio="Experiência em dados")
     # Hash antigo não entra nos resultados, mesmo antes de o hook ser chamado.
@@ -42,7 +43,7 @@ def test_incompatible_or_corrupt_embeddings_excluded(indexed_profiles, field, va
 
 def test_catalog_changes_and_targeted_reindex(embedding_provider):
     reader = InMemoryProfileRepository([
-        Profile("a", "Ana", entity_memberships=({"entity_id": "e"},)), Profile("b", "Bruno")
+        make_profile("a", "Ana", entity_ids=["e"]), make_profile("b", "Bruno")
     ], Catalogs(entities={"e": {"name": "Entidade", "description": "Dados"}}))
     provider, repository = embedding_provider, InMemoryEmbeddingRepository()
     index = IndexProfilesUseCase(reader, repository, provider)
