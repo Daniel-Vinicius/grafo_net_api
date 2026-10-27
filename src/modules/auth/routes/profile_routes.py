@@ -1,7 +1,9 @@
 from io import BytesIO
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import current_user, get_current_user, jwt_required
+
+from modules.search.hooks import profile_saved, project_saved
 
 from modules.auth.domain.errors import NotFoundError, PayloadTooLargeError, ValidationError
 from modules.auth.domain.profile import COURSES, FIELDS, STATUSES
@@ -30,7 +32,9 @@ def register_profile_routes(blueprint: Blueprint, repository: ProfileRepository,
     @blueprint.patch("/auth/profile")
     @jwt_required()
     def edit_profile():
-        return jsonify(service.update(current_user.id, body()).to_public())
+        profile = service.update(current_user.id, body())
+        profile_saved(current_app, current_user.id)
+        return jsonify(profile.to_public())
 
     @blueprint.get("/auth/entities")
     @jwt_required()
@@ -45,7 +49,9 @@ def register_profile_routes(blueprint: Blueprint, repository: ProfileRepository,
     @blueprint.post("/auth/research-projects")
     @jwt_required()
     def create_project():
-        return jsonify(service.create_project(current_user.id, body()).to_public()), 201
+        project = service.create_project(current_user.id, body())
+        profile_saved(current_app, current_user.id)
+        return jsonify(project.to_public()), 201
 
     @blueprint.get("/auth/research-projects/<project_id>")
     @jwt_required()
@@ -55,7 +61,9 @@ def register_profile_routes(blueprint: Blueprint, repository: ProfileRepository,
     @blueprint.patch("/auth/research-projects/<project_id>")
     @jwt_required()
     def edit_project(project_id: str):
-        return jsonify(service.update_project(current_user.id, project_id, body()).to_public())
+        project = service.update_project(current_user.id, project_id, body())
+        project_saved(current_app, project_id)
+        return jsonify(project.to_public())
 
     @blueprint.patch("/auth/account/email")
     @jwt_required()

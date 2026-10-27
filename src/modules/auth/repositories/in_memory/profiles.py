@@ -97,6 +97,8 @@ class InMemoryProfileRepository:
                         del self._invites._invites[key]
                     else:
                         self._invites._invites[key] = replace(invite, created_by=None)
+            for connection in self._invites.connections.list_for(user.id):
+                self._invites.connections.delete(connection.id)
             del self._profiles[user.id]
             self._users._users[:] = [item for item in self._users._users if item.id != user.id]
 

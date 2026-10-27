@@ -116,6 +116,8 @@ class MongoProfileRepository:
                 self._db.photo_cleanup.update_one({"_id": profile["photo_id"]}, {
                     "$set": {"ready_at": datetime.now(timezone.utc)},
                 }, upsert=True, session=session)
+            self._db.profile_embeddings.delete_one({"_id": user.id}, session=session)
+            self._db.connections.delete_many({"$or": [{"user_a_id": user.id}, {"user_b_id": user.id}]}, session=session)
             self._db.research_projects.update_many({"creator_id": user.id}, {"$set": {"creator_id": None}}, session=session)
             self._db.invites.delete_many({"created_by": user.id, "used_at": None}, session=session)
             self._db.invites.update_many({"created_by": user.id}, {"$set": {"created_by": None}}, session=session)

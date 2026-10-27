@@ -116,34 +116,34 @@ def test_mongo_full_http_flow_with_photo_credentials_and_delete(database):
     app.register_blueprint(create_auth_routes(app, MongoUserRepository(database), MongoTokenRepository(database), invites, Mock(spec=EmailSender), repository, photos))
     client = app.test_client()
     def login(password="senha1234"):
-        result = client.post("/api/auth/login", json={"email": user.email, "password": password})
+        result = client.post("/auth/login", json={"email": user.email, "password": password})
         assert result.status_code == 200
         return {"Authorization": "Bearer " + result.get_json()["access_token"]}
     headers = login()
-    assert client.patch("/api/auth/profile", headers=headers, json={"bio": "Bio atualizada", "entity_ids": ["insper-code"], "experiences_completed": True}).status_code == 200
-    created = client.post("/api/auth/research-projects", headers=headers, json=PROJECT)
+    assert client.patch("/auth/profile", headers=headers, json={"bio": "Bio atualizada", "entity_ids": ["insper-code"], "experiences_completed": True}).status_code == 200
+    created = client.post("/auth/research-projects", headers=headers, json=PROJECT)
     assert created.status_code == 201
     project_id = created.get_json()["id"]
-    assert project_id in client.get("/api/auth/profile", headers=headers).get_json()["research_project_ids"]
+    assert project_id in client.get("/auth/profile", headers=headers).get_json()["research_project_ids"]
     image = BytesIO()
     Image.new("RGB", (600, 600), "blue").save(image, format="PNG")
     image.seek(0)
-    assert client.put("/api/auth/profile/photo", headers=headers, data={"photo": (image, "photo.png")}).status_code == 204
+    assert client.put("/auth/profile/photo", headers=headers, data={"photo": (image, "photo.png")}).status_code == 204
     saved_profile = repository.get_profile(user.id)
     assert saved_profile is not None and saved_profile.photo_id is not None
     old_photo_id = saved_profile.photo_id
-    assert client.get("/api/auth/profile/photo", headers=headers).status_code == 200
-    assert client.patch("/api/auth/account/password", headers=headers, json={"current_password": "senha1234", "new_password": "nova-senha"}).status_code == 204
-    assert client.get("/api/auth/profile", headers=headers).status_code == 401
+    assert client.get("/auth/profile/photo", headers=headers).status_code == 200
+    assert client.patch("/auth/account/password", headers=headers, json={"current_password": "senha1234", "new_password": "nova-senha"}).status_code == 204
+    assert client.get("/auth/profile", headers=headers).status_code == 401
     headers = login("nova-senha")
-    assert client.delete("/api/auth/account", headers=headers, json={"current_password": "nova-senha"}).status_code == 204
+    assert client.delete("/auth/account", headers=headers, json={"current_password": "nova-senha"}).status_code == 204
     assert MongoUserRepository(database).find_by_id(user.id) is None
     assert repository.get_profile(user.id) is None
     saved_project = repository.get_project(project_id)
     assert saved_project is not None and saved_project.creator_id is None
     assert photos.get(old_photo_id) is None
     assert clean_photos(repository, photos) == 0
-    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    assert client.get("/auth/me", headers=headers).status_code == 401
 
 
 def test_profile_schema_and_unique_id(database):
@@ -155,7 +155,11 @@ def test_profile_schema_and_unique_id(database):
 
 def test_explicit_reset_preserves_unrelated_collections_and_reseeds(database):
     from database.setup import reset_test_data
-    database.connections.insert_one({"_id": "must-remain"})
+    from modules.connections.domain.connection import Connection
+    from modules.connections.repositories.mongo.repository import connection_document
+    sentinel = connection_document(Connection.create("preserve-a", "preserve-b"))
+    sentinel["_id"] = "must-remain"
+    database.connections.insert_one(sentinel)
     database.entities.insert_one({"_id": "test-entity", "name": "Test Entity"})
     reset_test_data(database)
     assert database.connections.find_one({"_id": "must-remain"}) is not None

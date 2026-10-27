@@ -12,6 +12,9 @@ from modules.auth.domain.errors import DuplicateEmailError, InvalidInviteError
 from modules.auth.domain.invite import Invite
 from modules.auth.domain.user import User
 from modules.auth.domain.profile import Profile
+from modules.connections.domain.connection import Connection
+from modules.connections.domain.errors import NetworkError
+from modules.connections.repositories.mongo.repository import connection_document
 
 
 class MongoUserRepository:
@@ -93,6 +96,21 @@ class MongoInviteRepository:
             )
             if invite is None:
                 raise InvalidInviteError()
+            sender_id = invite.get("created_by")
+            connection = None
+            if sender_id is not None:
+                identifiers: list[str | ObjectId] = [sender_id]
+                if ObjectId.is_valid(sender_id):
+                    identifiers.append(ObjectId(sender_id))
+                sender = self._users.find_one({"_id": {"$in": identifiers}, "is_active": True}, session=session)
+                if sender is None:
+                    raise NetworkError("Convidador inexistente ou inativo", 409)
+                count = self._database["connections"].count_documents({
+                    "$or": [{"user_a_id": sender_id}, {"user_b_id": sender_id}], "status": "accepted",
+                }, session=session)
+                if count >= 10:
+                    raise NetworkError("Convidador atingiu o limite de 10 amizades", 409)
+                connection = Connection.create(sender_id, user.id, accepted=True)
             document = asdict(user)
             document["_id"] = document.pop("id")
             if profile.id != user.id:
@@ -101,6 +119,8 @@ class MongoInviteRepository:
             profile_document = asdict(profile)
             profile_document["_id"] = profile_document.pop("id")
             self._profiles.insert_one(profile_document, session=session)
+            if connection is not None:
+                self._database["connections"].insert_one(connection_document(connection), session=session)
 
         try:
             with self._database.client.start_session() as session:

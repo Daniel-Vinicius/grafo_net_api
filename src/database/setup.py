@@ -18,11 +18,15 @@ from modules.auth.repositories.mongo.schema import (
     PROFILE_INDEXES, PROJECT_INDEXES, ENTITY_INDEXES,
 )
 
+from modules.connections.repositories.mongo.schema import CONNECTION_INDEXES, CONNECTION_VALIDATOR
+from modules.search.repositories.mongo.schema import EMBEDDING_VALIDATOR
+
 
 def preparar_banco(db: Database[dict[str, Any]]) -> None:
     validators = {"users": USER_VALIDATOR, "invites": INVITE_VALIDATOR,
+                  "connections": CONNECTION_VALIDATOR, "profile_embeddings": EMBEDDING_VALIDATOR,
                   "profiles": PROFILE_VALIDATOR, "research_projects": PROJECT_VALIDATOR, "entities": ENTITY_VALIDATOR}
-    collections = ("users", "revoked_tokens", "invites", "connections", "entities", "research_projects", "profiles", "photo_cleanup")
+    collections = ("users", "revoked_tokens", "invites", "connections", "entities", "research_projects", "profiles", "photo_cleanup", "profile_embeddings")
     existing = set(db.list_collection_names())
     for name in collections:
         if name in validators:
@@ -36,6 +40,7 @@ def preparar_banco(db: Database[dict[str, Any]]) -> None:
     db["users"].create_indexes(USER_INDEXES)
     db["invites"].create_indexes(INVITE_INDEXES)
     db["revoked_tokens"].create_indexes(TOKEN_INDEXES)
+    db["connections"].create_indexes(CONNECTION_INDEXES)
     db["profiles"].create_indexes(PROFILE_INDEXES)
     db["research_projects"].create_indexes(PROJECT_INDEXES)
     db["entities"].create_indexes(ENTITY_INDEXES)

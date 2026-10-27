@@ -40,14 +40,14 @@ def auth():
 
 def test_login_returns_bearer_token_and_allows_me(auth):
     app, client, records, password = auth
-    response = client.post("/api/auth/login", json={
+    response = client.post("/auth/login", json={
         "email": " Joao@EXAMPLE.com ", "password": password,
     })
     assert response.status_code == 200
     assert response.json["user"] == records[0].to_public()
     assert "Set-Cookie" not in response.headers
     token = response.json["access_token"]
-    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json == records[0].to_public()
     with app.app_context():
@@ -56,7 +56,7 @@ def test_login_returns_bearer_token_and_allows_me(auth):
     assert claims["exp"] - claims["iat"] == 900
     assert not {"email", "password", "password_hash", "is_active"} & claims.keys()
     client.set_cookie("access_token_cookie", token)
-    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/auth/me").status_code == 401
 
 
 @pytest.mark.parametrize("case", ["inactive", "unknown", "wrong", "long_password"])
@@ -69,7 +69,7 @@ def test_login_rejects_invalid_credentials(auth, case):
         email = "unknown@example.com"
     else:
         password = "a" * 73 if case == "long_password" else "wrong"
-    response = client.post("/api/auth/login", json={"email": email, "password": password})
+    response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 401
     assert response.json == {"message": "Usuario ou Senha inválidas"}
 
@@ -79,7 +79,7 @@ def test_login_rejects_invalid_credentials(auth, case):
     {"email": "a@b.com", "password": ""}])
 def test_login_rejects_invalid_json(auth, data):
     _app, client, _records, _password = auth
-    assert client.post("/api/auth/login", json=data).status_code == 400
+    assert client.post("/auth/login", json=data).status_code == 400
 
 
 @pytest.mark.parametrize("case", ["missing", "expired", "tampered", "malformed", "wrong_key"])
@@ -99,14 +99,14 @@ def test_me_rejects_invalid_jwt(auth, case):
         elif case == "wrong_key":
             token = jwt.encode({"sub": "1"}, "other-secret-with-at-least-32-bytes", algorithm="HS256")
         headers["Authorization"] = f"Bearer {token}"
-    response = client.get("/api/auth/me", headers=headers)
+    response = client.get("/auth/me", headers=headers)
     assert response.status_code == 401 and response.is_json
 
 
 @pytest.mark.parametrize("change", ["deleted", "inactive"])
 def test_me_reloads_user(auth, change):
     _app, client, records, password = auth
-    response = client.post("/api/auth/login", json={
+    response = client.post("/auth/login", json={
         "email": records[0].email, "password": password,
     })
     token = response.json["access_token"]
@@ -114,7 +114,7 @@ def test_me_reloads_user(auth, change):
         records.clear()
     else:
         records[0] = replace(records[0], is_active=False)
-    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401 and response.is_json
 
 
@@ -127,15 +127,15 @@ def test_rejects_invalid_jwt_secret(secret):
 def test_logout_revokes_only_the_presented_token(auth):
     _app, client, records, password = auth
     payload = {"email": records[0].email, "password": password}
-    first = client.post("/api/auth/login", json=payload).json["access_token"]
-    second = client.post("/api/auth/login", json=payload).json["access_token"]
+    first = client.post("/auth/login", json=payload).json["access_token"]
+    second = client.post("/auth/login", json=payload).json["access_token"]
     first_headers = {"Authorization": f"Bearer {first}"}
     second_headers = {"Authorization": f"Bearer {second}"}
-    assert client.post("/api/auth/logout").status_code == 401
-    assert client.post("/api/auth/logout", headers=first_headers).status_code == 204
-    assert client.get("/api/auth/me", headers=first_headers).status_code == 401
-    assert client.post("/api/auth/logout", headers=first_headers).status_code == 401
-    assert client.get("/api/auth/me", headers=second_headers).status_code == 200
+    assert client.post("/auth/logout").status_code == 401
+    assert client.post("/auth/logout", headers=first_headers).status_code == 204
+    assert client.get("/auth/me", headers=first_headers).status_code == 401
+    assert client.post("/auth/logout", headers=first_headers).status_code == 401
+    assert client.get("/auth/me", headers=second_headers).status_code == 200
 
 
 @pytest.fixture
@@ -160,46 +160,46 @@ def invitation_token(mailer):
 def test_invite_register_login_and_authenticated_invite(signup):
     client, users, invites, mailer = signup
     email = "Pessoa@AL.INSPER.EDU.BR"
-    assert client.post("/api/invitations", json={"email": email}).status_code == 401
-    issued = client.post("/api/invitations", json={"email": email}, headers={"X-Bootstrap-Key": "b" * 32})
+    assert client.post("/invitations", json={"email": email}).status_code == 401
+    issued = client.post("/invitations", json={"email": email}, headers={"X-Bootstrap-Key": "b" * 32})
     assert issued.status_code == 201
     token = invitation_token(mailer)
     assert token not in issued.get_data(as_text=True)
     assert "token_hash" not in issued.json
-    assert client.get("/api/auth/register", query_string={"token": token}).status_code == 405
+    assert client.get("/auth/register", query_string={"token": token}).status_code == 405
     assert invites.find_by_hash(token_hash(token)).used_at is None
     data = {"profile": {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "email": email, "password": " senha1234 ", "invite_token": token}
-    created = client.post("/api/auth/register", json=data)
+    created = client.post("/auth/register", json=data)
     assert created.status_code == 201
     assert set(created.json) == {"id", "email"}
     assert created.json["email"] == email.lower()
     assert "Set-Cookie" not in created.headers
     user = users.find_by_id(created.json["id"])
     assert users._profiles[user.id].name == "Pessoa" and user.is_active
-    login = client.post("/api/auth/login", json={"email": email, "password": data["password"]})
+    login = client.post("/auth/login", json={"email": email, "password": data["password"]})
     assert login.status_code == 200
     headers = {"Authorization": "Bearer " + login.json["access_token"]}
-    assert client.get("/api/auth/me", headers=headers).status_code == 200
-    second = client.post("/api/invitations", json={"email": "outra@insper.edu.br"}, headers=headers)
+    assert client.get("/auth/me", headers=headers).status_code == 200
+    second = client.post("/invitations", json={"email": "outra@insper.edu.br"}, headers=headers)
     assert second.status_code == 201
     assert invites.find_by_hash(token_hash(invitation_token(mailer))).created_by == user.id
-    assert client.post("/api/invitations", json={"email": "terceira@insper.edu.br"},
+    assert client.post("/invitations", json={"email": "terceira@insper.edu.br"},
         headers={"X-Bootstrap-Key": "b" * 32}).status_code == 403
-    assert client.post("/api/auth/register", json=data).status_code == 400
-    assert client.post("/api/auth/logout", headers=headers).status_code == 204
-    assert client.post("/api/invitations", json={"email": "terceira@insper.edu.br"}, headers=headers).status_code == 401
+    assert client.post("/auth/register", json=data).status_code == 400
+    assert client.post("/auth/logout", headers=headers).status_code == 204
+    assert client.post("/invitations", json={"email": "terceira@insper.edu.br"}, headers=headers).status_code == 401
 
 
 def test_invalid_jwt_cannot_fall_back_to_bootstrap(signup):
     client, _users, _invites, mailer = signup
-    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"}, headers={
+    response = client.post("/invitations", json={"email": "a@insper.edu.br"}, headers={
         "Authorization": "Bearer invalid", "X-Bootstrap-Key": "b" * 32,
     })
     assert response.status_code == 401
     mailer.send_invite.assert_not_called()
 
 
-@pytest.mark.parametrize("path", ["/api/invitations", "/api/auth/register"])
+@pytest.mark.parametrize("path", ["/invitations", "/auth/register"])
 @pytest.mark.parametrize("data", [None, [], "text"])
 def test_signup_routes_reject_non_object_json(signup, path, data):
     client, _users, _invites, _mailer = signup
@@ -209,7 +209,7 @@ def test_signup_routes_reject_non_object_json(signup, path, data):
 def test_failed_smtp_returns_503_without_leaving_an_invite(signup):
     client, users, invites, mailer = signup
     mailer.send_invite.side_effect = EmailDeliveryError("SMTP indisponível")
-    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+    response = client.post("/invitations", json={"email": "a@insper.edu.br"},
         headers={"X-Bootstrap-Key": "b" * 32})
     assert response.status_code == 503
     assert not users.has_any() and not invites._invites
@@ -222,7 +222,7 @@ def test_database_failure_returns_503_without_sending_email(signup, monkeypatch)
         raise ServerSelectionTimeoutError("Detalhe interno que não deve ser exposto")
 
     monkeypatch.setattr(invites, "save", unavailable)
-    response = client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+    response = client.post("/invitations", json={"email": "a@insper.edu.br"},
         headers={"X-Bootstrap-Key": "b" * 32})
     assert response.status_code == 503
     assert "Detalhe interno" not in response.get_data(as_text=True)
@@ -232,15 +232,15 @@ def test_database_failure_returns_503_without_sending_email(signup, monkeypatch)
 def test_duplicate_email_returns_409_and_preserves_second_invite(signup):
     client, _users, invites, mailer = signup
     for _ in range(2):
-        assert client.post("/api/invitations", json={"email": "a@insper.edu.br"},
+        assert client.post("/invitations", json={"email": "a@insper.edu.br"},
             headers={"X-Bootstrap-Key": "b" * 32}).status_code == 201
     first_link = mailer.send_invite.call_args_list[0].args[1]
     first_token = parse_qs(urlsplit(first_link).query)["token"][0]
     second_token = invitation_token(mailer)
     data = {"profile": {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "email": "a@insper.edu.br", "password": "senha1234", "invite_token": first_token}
-    assert client.post("/api/auth/register", json=data).status_code == 201
+    assert client.post("/auth/register", json=data).status_code == 201
     data["invite_token"] = second_token
-    assert client.post("/api/auth/register", json=data).status_code == 409
+    assert client.post("/auth/register", json=data).status_code == 409
     assert invites.find_by_hash(token_hash(second_token)).used_at is None
 
 

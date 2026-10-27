@@ -22,6 +22,11 @@ from modules.auth.useCases.invite.invite import InviteUseCase
 from modules.auth.useCases.login.login import AuthUseCase
 from modules.auth.useCases.register.register import RegisterUseCase
 
+from modules.connections.domain.errors import NetworkError
+from modules.connections.repositories.contract import ConnectionRepository
+from modules.connections.repositories.mongo.repository import MongoConnectionRepository
+from modules.search.hooks import profile_saved
+
 
 def create_auth_routes(
     app: Flask,
@@ -31,10 +36,14 @@ def create_auth_routes(
     mailer: EmailSender | None = None,
     profiles_repository: ProfileRepository | None = None,
     photos: PhotoStore | None = None,
+    connections_repository: ConnectionRepository | None = None,
 ) -> Blueprint:
     if users_repository is None or tokens_repository is None or invites_repository is None:
         database = create_database(app.config["MONGO_URI"], app.config["MONGO_DB"])
         app.extensions["mongo_client"] = database.client
+        app.extensions["mongo_database"] = database
+        if connections_repository is None:
+            connections_repository = MongoConnectionRepository(database)
         if profiles_repository is None:
             profiles_repository = MongoProfileRepository(database)
         if photos is None:
@@ -51,7 +60,7 @@ def create_auth_routes(
         profiles_repository = InMemoryProfileRepository(users_repository, invites_repository)
     if photos is None:
         photos = InMemoryPhotoStore()
-    app.extensions["profile_repository"] = profiles_repository
+    app.extensions["auth_profile_repository"] = profiles_repository
     app.extensions["photo_store"] = photos
     if mailer is None:
         mailer = SMTPEmailSender(
@@ -59,13 +68,18 @@ def create_auth_routes(
             app.config["SMTP_USERNAME"], app.config["SMTP_PASSWORD"], app.config["SMTP_USE_TLS"],
         )
     app.extensions["user_repository"] = users_repository
+    app.extensions["connection_repository"] = connections_repository if connections_repository is not None else getattr(invites_repository, "connections", None)
     configure_jwt(app, users_repository, tokens_repository)
     auth = AuthUseCase(users_repository, tokens_repository)
     registration = RegisterUseCase(users_repository, invites_repository)
     invitations = InviteUseCase(
         users_repository, invites_repository, mailer, app.config["FRONTEND_URL"], app.config["BOOTSTRAP_KEY"],
     )
-    blueprint = Blueprint("auth", __name__, url_prefix="/api")
+    blueprint = Blueprint("auth", __name__)
+
+    @blueprint.errorhandler(NetworkError)
+    def network_error(error: NetworkError):
+        return jsonify({"message": str(error)}), error.status
 
     @blueprint.errorhandler(NotFoundError)
     def not_found(error):
@@ -121,6 +135,7 @@ def create_auth_routes(
         identity = registration.register(
             data.get("profile"), data.get("email"), data.get("password"), data.get("invite_token"),
         )
+        profile_saved(app, identity["id"])
         return jsonify(identity), 201
 
     @blueprint.post("/auth/login")

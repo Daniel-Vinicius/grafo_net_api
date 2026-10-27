@@ -2,6 +2,12 @@
 
 Backend Flask do GrafoNet. Python 3.14, uv, MongoDB Atlas e módulos por funcionalidade.
 
+Rede e busca: [contratos, exemplos HTTP e integração com perfis](docs/network-api.md).
+Todas as rotas usam diretamente a URL do backend, sem prefixo `/api`:
+`/auth/login`, `/auth/register`, `/auth/me`, `/auth/logout`, `/invitations`,
+`/connections`, `/graph`, `/graph/paths/{id}`, `/search` e `/health`.
+Busca usa Gemini Embedding 2; conexões e caminhos funcionam sem chave do Gemini.
+
 ## Executar no WSL / Linux
 
 Dentro deste repositório, com uv instalado:
@@ -26,6 +32,13 @@ Versione pyproject.toml, uv.lock e .python-version.
 
 ## Estrutura combinada
 
+Todos os módulos seguem o mesmo padrão de `auth`: modelos em `domain/`,
+casos de uso em `useCases/<caso>/<caso>.py`, rotas em `routes/routes.py` e
+repositórios separados em `repositories/contract.py`,
+`repositories/mongo/repository.py` e `repositories/in_memory/repository.py`.
+Schemas Mongo ficam junto da implementação Mongo. Testes ficam ao lado do
+código correspondente; `test_app.py` cobre a integração entre os módulos.
+
 ```text
 src/
   app.py
@@ -47,6 +60,43 @@ src/
           repository.py
           schema.py
         in_memory/repository.py
+    connections/
+      routes/routes.py
+      useCases/manage/manage.py
+      domain/
+        connection.py
+        errors.py
+      repositories/
+        contract.py
+        mongo/
+          repository.py
+          schema.py
+        in_memory/repository.py
+    graph/
+      routes/routes.py
+      useCases/buildGraph/buildGraph.py
+      domain/
+        graph.py
+        profile.py
+      repositories/
+        contract.py
+        mongo/repository.py
+        in_memory/repository.py
+    search/
+      routes/routes.py
+      useCases/
+        index/index.py
+        search/search.py
+      domain/profile_text.py
+      repositories/
+        contract.py
+        mongo/
+          repository.py
+          schema.py
+        in_memory/repository.py
+      embeddings.py
+      hooks.py
+      commands.py
 ```
 
 Para preparar as coleções e índices explicitamente, execute na raiz da API:
@@ -76,12 +126,13 @@ O cadastro agora recebe `email`, `password`, `invite_token` e um objeto `profile
 
 Nome existe somente em `Profile`, na coleção `profiles`. Seu `_id` é o id do
 usuário: o cadastro cria os dois documentos e consome o convite em uma transação.
-Não há interesses, busca de pessoas ou consulta de perfil por id. Toda operação
+O módulo auth não oferece interesses, busca de pessoas ou consulta de perfil por id.
+Os módulos de grafo e busca existentes continuam disponíveis. Toda operação
 pessoal usa o usuário autenticado pelo JWT, sem aceitar um proprietário no JSON.
 
 ### Rotas
 
-Prefixo `/api/auth`. Apenas `GET /profile-options` é público. As demais rotas
+Prefixo `/auth`. Apenas `GET /profile-options` é público. As demais rotas
 exigem `Authorization: Bearer <token>`.
 
 | Método | Caminho | Corpo / resultado |
@@ -186,3 +237,30 @@ Validação em 27/10/2026: **130 testes backend passaram, sem skips**, usando Mo
 rollback de transações, GridFS, versão de sessão, preservação de pesquisas e reset
 restrito às coleções de auth. Nenhum reset foi executado no banco configurado da
 aplicação. O contêiner temporário foi removido ao concluir a validação.
+Para habilitar busca, defina `GEMINI_API_KEY` e indexe os perfis:
+
+```bash
+uv run flask --app src/app.py:create_app reindex-profiles
+```
+
+O cadastro já atualiza a indexação. A edição do perfil e a criação/edição de pesquisas notificam os hooks de indexação. `SEARCH_MIN_SCORE=0.50` configura o corte inicial.
+Os testes normais usam vetores falsos; testes Mongo exigem `MONGO_TEST_URI` e
+criam/removem apenas um banco temporário de teste. A API continua sem conexão
+com Mongo/Gemini durante os imports e sem requisições externas ao criar o app.
+
+
+E-mail: teste.frontend@grafonet.local
+Senha: GrafoNetTeste!2026
+
+### Integração com a main
+
+Conflitos resolvidos preservando conexões, grafo, busca e CORS. Os endpoints usam
+`/auth/...` e `/invitations`, sem `/api`. Cadastro salva usuário, perfil, convite
+e amizade na mesma transação. A rede lê a coleção `profiles`; auth usa a extensão
+`auth_profile_repository`, separada do leitor público `profile_repository`.
+Edição de perfil/pesquisa atualiza a indexação; exclusão limpa conexões e o vetor.
+Após integrar, reindexe os perfis para o novo formato de texto (versão 2).
+
+Validação da integração: **189 testes passaram, sem skips**, incluindo MongoDB
+real local isolado; Pyright terminou com zero erros e avisos. Não houve reset no
+banco da aplicação nem chamadas ao Gemini real durante os testes.

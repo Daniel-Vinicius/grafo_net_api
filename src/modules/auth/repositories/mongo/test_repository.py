@@ -151,3 +151,138 @@ def test_mongo_rechecks_invite_conditions(mongo_registration, case):
         repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     assert database["users"].find_one({"_id": user.id}) is None
     assert database["invites"].find_one({"_id": invite.id}) == before
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_mongo_invitation_friendship_and_full_inviter_rollback(mongo_registration, full):
+    from modules.connections.domain.connection import Connection
+    from modules.connections.domain.errors import NetworkError
+    from modules.connections.repositories.mongo.repository import MongoConnectionRepository
+
+    database, repository = mongo_registration
+    sender_invite, sender = pending_registration(repository)
+    repository.register_with_invite(sender, Profile.create(sender.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), sender_invite.token_hash)
+    connections = MongoConnectionRepository(database)
+    if full:
+        for _ in range(10):
+            connections.save(Connection.create(sender.id, str(uuid4()), True))
+    invite, user = pending_registration(repository)
+    invite = replace(invite, created_by=sender.id)
+    database["invites"].update_one({"_id": invite.id}, {"$set": {"created_by": sender.id}})
+    if full:
+        with pytest.raises(NetworkError):
+            repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
+        assert database["users"].find_one({"_id": user.id}) is None
+        pending = repository.find_by_hash(invite.token_hash)
+        assert pending is not None and pending.used_at is None
+    else:
+        repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
+        friendship = connections.find_pair(user.id, sender.id)
+        assert friendship is not None and friendship.status == "accepted"
+
+
+def test_mongo_connection_unique_pair_and_embedding_roundtrip(mongo_registration):
+    from modules.connections.domain.connection import Connection
+    from modules.connections.domain.errors import NetworkError
+    from modules.connections.repositories.mongo.repository import MongoConnectionRepository
+    from modules.search.repositories.mongo.repository import MongoEmbeddingRepository
+
+    database, _ = mongo_registration
+    connections = MongoConnectionRepository(database)
+    first, second = str(uuid4()), str(uuid4())
+    connection = Connection.create(first, second)
+    connections.save(connection)
+    with pytest.raises(NetworkError):
+        connections.save(Connection.create(second, first))
+    assert len(connections.list_for(first)) == 1
+    connections.save(replace(connection, status="accepted", accepted_at=datetime.now(timezone.utc)))
+    assert connections.count_accepted(second) == 1
+    assert any(item.id == connection.id for item in connections.accepted())
+    connections.delete(connection.id)
+    assert connections.find(connection.id) is None
+    embeddings = MongoEmbeddingRepository(database)
+    record = {"_id": first, "vector": [1.0, 0.0], "model": "test", "dimensions": 2,
+              "text_version": 1, "source_hash": "hash", "status": "ready"}
+    embeddings.save(record)
+    assert embeddings.all()[first] == record
+
+
+def test_real_app_registration_indexing_graph_and_search(mongo_registration):
+    from app import create_app
+    from modules.search.hooks import profile_saved
+
+    class FakeProvider:
+        model = "integration-test"
+        dimensions = 2
+        queries = 0
+
+        def document(self, text: str, title: str) -> list[float]:
+            return [1, 0]
+
+        def query(self, text: str) -> list[float]:
+            self.queries += 1
+            return [1, 0]
+
+    database, repository = mongo_registration
+    sender_invite, sender = pending_registration(repository)
+    repository.register_with_invite(sender, Profile.create(sender.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), sender_invite.token_hash)
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    recipient = uuid4().hex + "@insper.edu.br"
+    invite = Invite(str(uuid4()), recipient, token_hash(token), sender.id, now, now + timedelta(days=1))
+    repository.save(invite)
+    app = create_app({
+        "TESTING": True, "MONGO_URI": os.environ["MONGO_TEST_URI"], "MONGO_DB": database.name,
+        "JWT_SECRET_KEY": "real-app-test-secret-at-least-32-bytes", "GEMINI_API_KEY": None,
+    })
+    provider = FakeProvider()
+    app.extensions["index_profiles_use_case"].provider = provider
+    try:
+        client = app.test_client()
+        created = client.post("/auth/register", json={
+            "profile": {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "email": recipient, "password": "senha1234", "invite_token": token,
+        })
+        assert created.status_code == 201
+        assert created.json is not None
+        user_id = created.json["id"]
+        embedding = database["profile_embeddings"].find_one({"_id": user_id})
+        assert embedding is not None and embedding["status"] == "ready"
+        login = client.post("/auth/login", json={"email": recipient, "password": "senha1234"})
+        assert login.json is not None
+        headers = {"Authorization": "Bearer " + login.json["access_token"]}
+        graph = client.get("/graph", headers=headers)
+        assert graph.json is not None
+        assert {node["id"] for node in graph.json["nodes"]} == {sender.id, user_id}
+        assert len(graph.json["edges"]) == 1
+        sender_login = client.post("/auth/login", json={"email": sender.email, "password": "senha1234"})
+        sender_headers = {"Authorization": "Bearer " + sender_login.get_json()["access_token"]}
+        edited = client.patch("/auth/profile", headers=sender_headers, json={"bio": "Trabalho com fintechs"})
+        assert edited.status_code == 200
+        assert database["profiles"].find_one({"_id": sender.id})["bio"] == "Trabalho com fintechs"
+        assert database["profile_embeddings"].find_one({"_id": sender.id})["status"] == "ready"
+        result = client.post("/search", json={"query": "fintechs"}, headers=headers)
+        assert result.json is not None
+        assert result.status_code == 200 and result.json["total"] == 1
+        assert result.json["results"][0]["profile"]["id"] == sender.id
+        assert result.json["results"][0]["cost"] == {"contextual_edges": 0, "hops": 1}
+        assert provider.queries == 1
+        assert "password_hash" not in result.get_data(as_text=True)
+        assert sender.email not in result.get_data(as_text=True)
+        research = client.post("/auth/research-projects", headers=sender_headers, json={
+            "title": "Pesquisa de dados", "description": "Projeto inicial", "advisor": "Professora",
+            "field_id": "technology", "start_date": "2026-01-01", "end_date": None, "status": "planned",
+        })
+        assert research.status_code == 201
+        project_id = research.get_json()["id"]
+        assert client.patch("/auth/profile", headers=headers, json={"research_project_ids": [project_id]}).status_code == 200
+        before = database["profile_embeddings"].find_one({"_id": user_id})["source_hash"]
+        assert client.patch("/auth/research-projects/" + project_id, headers=sender_headers,
+                            json={"description": "Nova descrição pesquisável"}).status_code == 200
+        assert database["profile_embeddings"].find_one({"_id": user_id})["source_hash"] != before
+        assert client.delete("/auth/account", headers=sender_headers, json={"current_password": "senha1234"}).status_code == 204
+        assert database["profile_embeddings"].find_one({"_id": sender.id}) is None
+        assert database["connections"].count_documents({"$or": [{"user_a_id": sender.id}, {"user_b_id": sender.id}]}) == 0
+        assert database["research_projects"].find_one({"_id": project_id})["creator_id"] is None
+        assert client.get("/graph", headers=headers).get_json()["edges"] == []
+    finally:
+        app.extensions["mongo_client"].close()

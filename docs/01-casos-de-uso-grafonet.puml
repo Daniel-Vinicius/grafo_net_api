@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title GrafoNet - Diagrama de casos de uso do MVP
 
 left to right direction
@@ -43,12 +44,16 @@ note right of UC_Amizades
   depois de confirmação recíproca.
   Cada usuário pode ter até
   10 amizades de confiança.
+  Vínculos de turma, entidade e IC
+  também podem formar etapas contextuais.
 end note
 
 note right of UC_Buscar
   Um perfil relevante pode aparecer
   mesmo sem caminho conhecido.
   Nesse caso, o sistema exibe um aviso.
+  A busca compara embeddings e permite
+  priorizar proximidade ou relevância.
 end note
 
 note right of UC_CriarConta
