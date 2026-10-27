@@ -20,11 +20,17 @@ start
 em linguagem natural;
 
 |GrafoNet|
-:Interpretar os critérios da busca;
-:Consultar os perfis autorizados;
+:Gerar embedding da consulta com Gemini;
+:Ler perfis ativos e embeddings atuais;
+:Comparar vetores e aplicar corte de similaridade;
+:Montar grafo de amizades aceitas,
+turma, entidade e IC confirmada;
+:Calcular árvore de caminhos com Dijkstra
+desde o usuário até todos os alcançáveis;
 
 if () then ([Há perfis relevantes])
-  :Ordenar e exibir os resultados;
+  :Ordenar por proximidade ou relevância;
+  :Paginar e devolver resultados e união dos caminhos;
 
   |Usuário|
   :Selecionar um perfil;
@@ -32,11 +38,11 @@ if () then ([Há perfis relevantes])
   |GrafoNet|
   :Exibir as informações permitidas
 do perfil;
-  :Calcular os caminhos de confiança;
+  :Reconstruir caminho pelos predecessores;
 
   if () then ([Existe caminho conhecido])
-    :Exibir o caminho mais curto
-ou relevante;
+    :Exibir caminho de menor custo
+(contextuais, etapas);
     :Mostrar as pessoas intermediárias
 e o contexto de cada vínculo;
   else ([Não existe caminho conhecido])

@@ -5,6 +5,10 @@ from threading import RLock
 from modules.auth.domain.errors import DuplicateEmailError, InvalidInviteError
 from modules.auth.domain.invite import Invite
 from modules.auth.domain.user import User
+from modules.connections.domain.connection import Connection
+from modules.connections.repositories.contract import ConnectionRepository
+from modules.connections.repositories.in_memory.repository import InMemoryConnectionRepository
+from modules.connections.useCases.manage.manage import ConnectionUseCase
 
 
 class InMemoryUserRepository:
@@ -37,9 +41,10 @@ class InMemoryTokenRepository:
 
 
 class InMemoryInviteRepository:
-    def __init__(self, users: InMemoryUserRepository):
+    def __init__(self, users: InMemoryUserRepository, connections: ConnectionRepository | None = None):
         self._users = users
         self._invites: dict[str, Invite] = {}
+        self.connections = connections if connections is not None else InMemoryConnectionRepository()
 
     def save(self, invite: Invite) -> None:
         with self._users._lock:
@@ -64,6 +69,11 @@ class InMemoryInviteRepository:
             invite.validate_for(user.email, now)
             if self._users.find_by_email(user.email) is not None:
                 raise DuplicateEmailError()
+            connection = None
+            if invite.created_by is not None:
+                ConnectionUseCase(self.connections, self._users).validate_inviter(invite.created_by)
+                connection = Connection.create(invite.created_by, user.id, accepted=True)
+                self.connections.save(connection)
             consumed = replace(invite, used_at=now)
             self._users._users.append(user)
             self._invites[invite.id] = consumed
