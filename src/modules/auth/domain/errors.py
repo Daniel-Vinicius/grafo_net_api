@@ -22,3 +22,15 @@ class BootstrapForbiddenError(Exception):
 
 class EmailDeliveryError(Exception):
     pass
+
+
+class NotFoundError(Exception):
+    pass
+
+
+class ForbiddenError(Exception):
+    pass
+
+
+class PayloadTooLargeError(Exception):
+    pass

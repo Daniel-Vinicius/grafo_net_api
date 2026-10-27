@@ -36,7 +36,7 @@ def test_register_rejects_invalid_invite_without_creating_account(registration, 
         token = secrets.token_urlsafe(32)
     invites.save(invite)
     with pytest.raises(InvalidInviteError):
-        service.register("Pessoa", email, "senha1234", token)
+        service.register({"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, email, "senha1234", token)
     assert not users.has_any()
     assert invites.find_by_hash(invite.token_hash) == invite
 
@@ -46,7 +46,7 @@ def test_register_rejects_invalid_invite_without_creating_account(registration, 
 def test_register_validates_name_and_password_before_consuming(registration, name, password):
     service, users, invites, invite, token = registration
     with pytest.raises(ValidationError):
-        service.register(name, invite.email, password, token)
+        service.register({**{"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "name": name}, invite.email, password, token)
     assert not users.has_any()
     assert invites.find_by_hash(invite.token_hash) == invite
 
@@ -55,7 +55,7 @@ def test_existing_email_does_not_consume_invite(registration):
     service, users, invites, invite, token = registration
     users._users.append(User("existing", invite.email, "hash", True))
     with pytest.raises(DuplicateEmailError):
-        service.register("Pessoa", invite.email, "senha1234", token)
+        service.register({"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, invite.email, "senha1234", token)
     assert invites.find_by_hash(invite.token_hash) == invite
 
 
@@ -68,5 +68,5 @@ def test_repository_rechecks_invite_after_password_hash(registration, monkeypatc
 
     monkeypatch.setattr("modules.auth.useCases.register.register.hash_password", hash_and_consume)
     with pytest.raises(InvalidInviteError):
-        service.register("Pessoa", invite.email, "senha1234", token)
+        service.register({"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, invite.email, "senha1234", token)
     assert not users.has_any()

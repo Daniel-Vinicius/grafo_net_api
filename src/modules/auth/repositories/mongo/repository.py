@@ -10,7 +10,8 @@ from pymongo.write_concern import WriteConcern
 
 from modules.auth.domain.errors import DuplicateEmailError, InvalidInviteError
 from modules.auth.domain.invite import Invite
-from modules.auth.domain.user import Profile, User
+from modules.auth.domain.user import User
+from modules.auth.domain.profile import Profile
 
 
 class MongoUserRepository:
@@ -40,7 +41,7 @@ class MongoUserRepository:
             email=document["email"],
             password_hash=document["password_hash"],
             is_active=document.get("is_active") is True,
-            profile=Profile(document["profile"]["name"]) if document.get("profile") else None,
+            auth_version=document.get("auth_version", 0),
         )
 
 
@@ -60,6 +61,7 @@ class MongoTokenRepository:
 class MongoInviteRepository:
     def __init__(self, database: Database[dict[str, Any]]):
         self._database = database
+        self._profiles = database["profiles"]
         self._invites = database["invites"]
         self._users = database["users"]
 
@@ -81,7 +83,7 @@ class MongoInviteRepository:
     def remove_unused(self, invite_id: str) -> None:
         self._invites.delete_one({"_id": invite_id, "used_at": None})
 
-    def register_with_invite(self, user: User, token_hash: str) -> None:
+    def register_with_invite(self, user: User, profile: Profile, token_hash: str) -> None:
         def register(session: ClientSession) -> None:
             now = datetime.now(timezone.utc)
             invite = self._invites.find_one_and_update(
@@ -93,7 +95,12 @@ class MongoInviteRepository:
                 raise InvalidInviteError()
             document = asdict(user)
             document["_id"] = document.pop("id")
+            if profile.id != user.id:
+                raise ValueError("Perfil incompatível")
             self._users.insert_one(document, session=session)
+            profile_document = asdict(profile)
+            profile_document["_id"] = profile_document.pop("id")
+            self._profiles.insert_one(profile_document, session=session)
 
         try:
             with self._database.client.start_session() as session:

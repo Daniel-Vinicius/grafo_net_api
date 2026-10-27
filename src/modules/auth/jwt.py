@@ -25,12 +25,17 @@ def configure_jwt(app: Flask, users: UserRepository, tokens: TokenRepository) ->
     def is_revoked(_header: dict[str, Any], payload: dict[str, Any]) -> bool:
         return tokens.is_revoked(payload["jti"])
 
+    @jwt.additional_claims_loader
+    def version(identity: str) -> dict:
+        user = users.find_by_id(identity)
+        return {"auth_version": user.auth_version if user else -1}
+
     @jwt.user_lookup_loader
     def load_user(_header: dict[str, Any], payload: dict[str, Any]) -> User | None:
         user_id = payload.get("sub")
         if not isinstance(user_id, str):
             return None
         user = users.find_by_id(user_id)
-        return user if user is not None and user.is_active else None
+        return user if user is not None and user.is_active and payload.get("auth_version") == user.auth_version else None
 
     return jwt

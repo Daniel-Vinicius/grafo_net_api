@@ -17,7 +17,8 @@ import pytest
 from database.setup import preparar_banco
 from modules.auth.domain.errors import DuplicateEmailError, InvalidInviteError
 from modules.auth.domain.invite import Invite, token_hash
-from modules.auth.domain.user import Profile, User
+from modules.auth.domain.user import User
+from modules.auth.domain.profile import Profile
 from modules.auth.repositories.mongo.repository import MongoInviteRepository, MongoUserRepository
 
 
@@ -79,21 +80,22 @@ def pending_registration(repository, email=None):
     invite = Invite(str(uuid4()), email, token_hash(secrets.token_urlsafe(32)), None, now, now + timedelta(days=7))
     repository.save(invite)
     password_hash = bcrypt.hashpw(b"senha1234", bcrypt.gensalt(rounds=4)).decode()
-    user = User(str(uuid4()), email, password_hash, True, Profile("Pessoa"))
+    user = User(str(uuid4()), email, password_hash, True)
     return invite, user
 
 
 def test_mongo_register_consumes_once_and_rolls_back_duplicate_email(mongo_registration):
     database, repository = mongo_registration
     invite, user = pending_registration(repository)
-    repository.register_with_invite(user, invite.token_hash)
+    repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     assert repository.find_by_hash(invite.token_hash).used_at is not None
-    assert database["users"].find_one({"_id": user.id})["profile"] == {"name": "Pessoa"}
+    assert database["profiles"].find_one({"_id": user.id})["name"] == "Pessoa"
+    assert "profile" not in database["users"].find_one({"_id": user.id})
     with pytest.raises(InvalidInviteError):
-        repository.register_with_invite(user, invite.token_hash)
+        repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     second, duplicate = pending_registration(repository, user.email)
     with pytest.raises(DuplicateEmailError):
-        repository.register_with_invite(duplicate, second.token_hash)
+        repository.register_with_invite(duplicate, Profile.create(duplicate.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), second.token_hash)
     assert repository.find_by_hash(second.token_hash).used_at is None
     assert database["users"].count_documents({"email": user.email}) == 1
 
@@ -108,10 +110,10 @@ def test_mongo_failure_after_claim_keeps_invite_usable(mongo_registration, monke
     with monkeypatch.context() as patch:
         patch.setattr(repository._users, "insert_one", fail)
         with pytest.raises(OperationFailure):
-            repository.register_with_invite(user, invite.token_hash)
+            repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     assert repository.find_by_hash(invite.token_hash).used_at is None
     assert database["users"].find_one({"_id": user.id}) is None
-    repository.register_with_invite(user, invite.token_hash)
+    repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     assert database["users"].find_one({"_id": user.id}) is not None
 
 
@@ -123,7 +125,7 @@ def test_mongo_concurrent_registration_has_one_winner(mongo_registration):
     def register():
         barrier.wait(timeout=10)
         try:
-            repository.register_with_invite(replace(user, id=str(uuid4())), invite.token_hash)
+            repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
             return "created"
         except InvalidInviteError:
             return "invalid"
@@ -146,6 +148,6 @@ def test_mongo_rechecks_invite_conditions(mongo_registration, case):
         user = replace(user, email="outra-" + user.email)
     before = database["invites"].find_one({"_id": invite.id})
     with pytest.raises(InvalidInviteError):
-        repository.register_with_invite(user, invite.token_hash)
+        repository.register_with_invite(user, Profile.create(user.id, {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}), invite.token_hash)
     assert database["users"].find_one({"_id": user.id}) is None
     assert database["invites"].find_one({"_id": invite.id}) == before

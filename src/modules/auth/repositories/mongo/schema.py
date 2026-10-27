@@ -62,3 +62,54 @@ INVITE_VALIDATOR: dict[str, Any] = {
 }
 
 INVITE_INDEXES = [IndexModel("token_hash", unique=True, name="invites_token_hash_unique")]
+
+# O perfil deixa de ser embutido no documento de autenticação.
+USER_VALIDATOR["$jsonSchema"]["properties"].pop("profile", None)
+USER_VALIDATOR["$jsonSchema"]["properties"]["auth_version"] = {"bsonType": "int", "minimum": 0}
+USER_VALIDATOR["$jsonSchema"]["required"].append("auth_version")
+USER_VALIDATOR["$jsonSchema"]["additionalProperties"] = False
+
+from modules.auth.domain.profile import COURSES, FIELDS, STATUSES
+
+
+def string(maximum: int | None = None) -> dict:
+    result = {"bsonType": "string", "minLength": 1}
+    if maximum:
+        result["maxLength"] = maximum
+    return result
+
+
+PROFILE_VALIDATOR = {"$jsonSchema": {
+    "bsonType": "object", "additionalProperties": False,
+    "required": ["_id", "name", "course_id", "semester", "field_id", "bio", "photo_id",
+                 "entity_ids", "research_project_ids", "experiences_completed"],
+    "properties": {
+        "_id": string(), "name": string(100), "bio": string(500),
+        "course_id": {"enum": [item["id"] for item in COURSES]},
+        "field_id": {"enum": [item["id"] for item in FIELDS]},
+        "semester": {"bsonType": "int", "minimum": 1, "maximum": 8},
+        "photo_id": {"bsonType": ["string", "null"]},
+        "entity_ids": {"bsonType": "array", "uniqueItems": True, "items": string()},
+        "research_project_ids": {"bsonType": "array", "uniqueItems": True, "items": string()},
+        "experiences_completed": {"bsonType": "bool"},
+    },
+}}
+PROJECT_VALIDATOR = {"$jsonSchema": {
+    "bsonType": "object", "additionalProperties": False,
+    "required": ["_id", "creator_id", "title", "description", "advisor", "field_id", "start_date", "end_date", "status"],
+    "properties": {
+        "_id": string(), "creator_id": {"bsonType": ["string", "null"]},
+        "title": string(150), "description": string(2000), "advisor": string(100),
+        "field_id": {"enum": [item["id"] for item in FIELDS]},
+        "start_date": {"bsonType": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+        "end_date": {"bsonType": ["string", "null"], "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+        "status": {"enum": STATUSES},
+    },
+}}
+ENTITY_VALIDATOR = {"$jsonSchema": {
+    "bsonType": "object", "required": ["_id", "name"], "additionalProperties": False,
+    "properties": {"_id": string(), "name": string(100)},
+}}
+PROFILE_INDEXES = [IndexModel("photo_id", sparse=True, name="profiles_photo")]
+PROJECT_INDEXES = [IndexModel("creator_id", name="projects_creator")]
+ENTITY_INDEXES = [IndexModel("name", unique=True, name="entities_name_unique")]

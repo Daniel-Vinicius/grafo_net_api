@@ -168,14 +168,14 @@ def test_invite_register_login_and_authenticated_invite(signup):
     assert "token_hash" not in issued.json
     assert client.get("/api/auth/register", query_string={"token": token}).status_code == 405
     assert invites.find_by_hash(token_hash(token)).used_at is None
-    data = {"name": " Pessoa ", "email": email, "password": " senha1234 ", "invite_token": token}
+    data = {"profile": {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "email": email, "password": " senha1234 ", "invite_token": token}
     created = client.post("/api/auth/register", json=data)
     assert created.status_code == 201
     assert set(created.json) == {"id", "email"}
     assert created.json["email"] == email.lower()
     assert "Set-Cookie" not in created.headers
     user = users.find_by_id(created.json["id"])
-    assert user.profile.name == "Pessoa" and user.is_active
+    assert users._profiles[user.id].name == "Pessoa" and user.is_active
     login = client.post("/api/auth/login", json={"email": email, "password": data["password"]})
     assert login.status_code == 200
     headers = {"Authorization": "Bearer " + login.json["access_token"]}
@@ -237,7 +237,7 @@ def test_duplicate_email_returns_409_and_preserves_second_invite(signup):
     first_link = mailer.send_invite.call_args_list[0].args[1]
     first_token = parse_qs(urlsplit(first_link).query)["token"][0]
     second_token = invitation_token(mailer)
-    data = {"name": "Pessoa", "email": "a@insper.edu.br", "password": "senha1234", "invite_token": first_token}
+    data = {"profile": {"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "email": "a@insper.edu.br", "password": "senha1234", "invite_token": first_token}
     assert client.post("/api/auth/register", json=data).status_code == 201
     data["invite_token"] = second_token
     assert client.post("/api/auth/register", json=data).status_code == 409
