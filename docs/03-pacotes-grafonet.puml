@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 
 top to bottom direction
 
@@ -24,59 +25,52 @@ hide empty members
 allowmixing
 
 package "search" as Busca {
-  class Consulta
-  class "Critério de busca"
-  class "Resultado de busca"
-  class "Serviço de busca" <<serviço>>
-}
-
-package "ai" as IA {
-  class "Interpretador de consulta" <<adaptador>>
+  class SearchUseCase <<caso de uso>>
+  class IndexProfilesUseCase <<caso de uso>>
+  interface EmbeddingProvider
+  class GeminiEmbeddings <<adaptador REST>>
+  interface EmbeddingRepository
 }
 
 package "graph" as Grafo {
-  class Caminho
-  class "Calculadora de caminhos" <<serviço>>
+  class NetworkGraph
+  class GraphUseCase <<caso de uso>>
+  class PathTree
+  class "Caminho (Path)" as Caminho
+  class Edge
+  interface ProfileRepository
+  class NetworkProfile <<visão pública>>
 }
 
 package "connections" as Conexoes {
-  class "Solicitação de amizade"
-  class Amizade
+  class Connection
+  class ConnectionUseCase <<caso de uso>>
+  interface ConnectionRepository
 }
 
-package "profiles" as Perfis {
-  class Perfil
-  class Experiência
+package "auth (contas e perfis)" as Contas {
+  class User
+  class Profile
+  class Invite
 }
 
-package "auth" as Contas {
-  class Usuário
-  class Convite
-  class "Serviço de login" <<serviço>>
-}
+Busca ..> Grafo : relevância + custo do caminho
+Grafo ..> Conexoes : amizades aceitas
+Grafo ..> Contas : perfis e participações
+Conexoes ..> Contas : identidade e atividade
+GeminiEmbeddings ..|> EmbeddingProvider
+User *-- Profile : JSON embutido
 
-' Espaçadores transparentes para aumentar a distância entre os blocos.
-rectangle "espaço horizontal" as GapH1
-rectangle "espaço horizontal" as GapH2
-rectangle "espaço\nvertical\nvertical" as GapV1
-rectangle "espaço\nvertical\nvertical" as GapV2
+note bottom of Busca
+  Gemini gera vetores; comparação é local.
+  Auth chama o hook após salvar o perfil.
+  Vetores persistidos em profile_embeddings.
+end note
 
-Busca -[hidden]right-> GapH1
-GapH1 -[hidden]right-> Grafo
-Grafo -[hidden]right-> GapH2
-GapH2 -[hidden]right-> IA
-Grafo -[hidden]down-> GapV1
-GapV1 -[hidden]down-> Perfis
-Perfis -[hidden]down-> GapV2
-GapV2 -[hidden]down-> Contas
-
-' Dependências e direções usadas para organizar o desenho.
-Busca .left.> IA
-Busca .right.> Grafo
-Busca .down.> Perfis
-Grafo .down.> Conexoes
-Grafo .down.> Perfis
-Conexoes .left.> Perfis
-Perfis .down.> Contas
+note bottom of Grafo
+  Pessoas são vértices; vínculos são arestas.
+  Custo = (contextuais, etapas).
+  Caminhos calculados, sem coleção própria.
+end note
 
 @enduml

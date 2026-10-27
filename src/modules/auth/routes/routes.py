@@ -16,6 +16,10 @@ from modules.auth.repositories.mongo.repository import MongoInviteRepository, Mo
 from modules.auth.useCases.invite.invite import InviteUseCase
 from modules.auth.useCases.login.login import AuthUseCase
 from modules.auth.useCases.register.register import RegisterUseCase
+from modules.connections.domain.errors import NetworkError
+from modules.connections.repositories.contract import ConnectionRepository
+from modules.connections.repositories.mongo.repository import MongoConnectionRepository
+from modules.search.hooks import profile_saved
 
 
 def create_auth_routes(
@@ -24,29 +28,34 @@ def create_auth_routes(
     tokens_repository: TokenRepository | None = None,
     invites_repository: InviteRepository | None = None,
     mailer: EmailSender | None = None,
+    connections_repository: ConnectionRepository | None = None,
 ) -> Blueprint:
     if users_repository is None or tokens_repository is None or invites_repository is None:
         database = create_database(app.config["MONGO_URI"], app.config["MONGO_DB"])
         app.extensions["mongo_client"] = database.client
+        app.extensions["mongo_database"] = database
         if users_repository is None:
             users_repository = MongoUserRepository(database)
         if tokens_repository is None:
             tokens_repository = MongoTokenRepository(database)
         if invites_repository is None:
             invites_repository = MongoInviteRepository(database)
+        if connections_repository is None:
+            connections_repository = MongoConnectionRepository(database)
     if mailer is None:
         mailer = SMTPEmailSender(
             app.config["SMTP_HOST"], app.config["SMTP_PORT"], app.config["SMTP_FROM"],
             app.config["SMTP_USERNAME"], app.config["SMTP_PASSWORD"], app.config["SMTP_USE_TLS"],
         )
     app.extensions["user_repository"] = users_repository
+    app.extensions["connection_repository"] = connections_repository or getattr(invites_repository, "connections", None)
     configure_jwt(app, users_repository, tokens_repository)
     auth = AuthUseCase(users_repository, tokens_repository)
     registration = RegisterUseCase(users_repository, invites_repository)
     invitations = InviteUseCase(
         users_repository, invites_repository, mailer, app.config["FRONTEND_URL"], app.config["BOOTSTRAP_KEY"],
     )
-    blueprint = Blueprint("auth", __name__, url_prefix="/api")
+    blueprint = Blueprint("auth", __name__)
 
     def json_body() -> dict:
         data = request.get_json(silent=True)
@@ -61,6 +70,10 @@ def create_auth_routes(
     @blueprint.errorhandler(DuplicateEmailError)
     def duplicate_email(error):
         return jsonify({"message": str(error)}), 409
+
+    @blueprint.errorhandler(NetworkError)
+    def network_error(error: NetworkError):
+        return jsonify({"message": str(error)}), error.status
 
     @blueprint.errorhandler(AuthenticationRequiredError)
     def authentication_required(error):
@@ -89,6 +102,7 @@ def create_auth_routes(
         identity = registration.register(
             data.get("name"), data.get("email"), data.get("password"), data.get("invite_token"),
         )
+        profile_saved(app, identity["id"])
         return jsonify(identity), 201
 
     @blueprint.post("/auth/login")

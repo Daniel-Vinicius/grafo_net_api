@@ -15,11 +15,14 @@ from database.connection import create_database
 from modules.auth.repositories.mongo.schema import (
     INVITE_INDEXES, INVITE_VALIDATOR, TOKEN_INDEXES, USER_INDEXES, USER_VALIDATOR,
 )
+from modules.connections.repositories.mongo.schema import CONNECTION_INDEXES, CONNECTION_VALIDATOR
+from modules.search.repositories.mongo.schema import EMBEDDING_VALIDATOR
 
 
 def preparar_banco(db: Database[dict[str, Any]]) -> None:
-    validators = {"users": USER_VALIDATOR, "invites": INVITE_VALIDATOR}
-    collections = ("users", "revoked_tokens", "invites", "connections", "entities", "research_projects")
+    validators = {"users": USER_VALIDATOR, "invites": INVITE_VALIDATOR,
+                  "connections": CONNECTION_VALIDATOR, "profile_embeddings": EMBEDDING_VALIDATOR}
+    collections = ("users", "revoked_tokens", "invites", "connections", "entities", "research_projects", "profile_embeddings")
     existing = set(db.list_collection_names())
     for name in collections:
         if name in validators:
@@ -33,6 +36,7 @@ def preparar_banco(db: Database[dict[str, Any]]) -> None:
     db["users"].create_indexes(USER_INDEXES)
     db["invites"].create_indexes(INVITE_INDEXES)
     db["revoked_tokens"].create_indexes(TOKEN_INDEXES)
+    db["connections"].create_indexes(CONNECTION_INDEXES)
     print("Coleções, validações e índices preparados.")
 
 

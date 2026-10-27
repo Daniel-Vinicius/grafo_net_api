@@ -38,11 +38,11 @@ class Convite {
 }
 
 class Perfil {
-  - id: UUID
   - nome: String
   - bio: String
   - curso: String
   - semestreIngresso: String
+  - turma: String
   - areaAtuacao: String
   - interesses: List<String>
   + atualizarDados(): void
@@ -77,31 +77,86 @@ class IniciacaoCientifica {
   - fim: Date
 }
 
+class ParticipacaoPesquisa {
+  - id: UUID
+  - orientadorUserId: UUID
+  - status: pendente | confirmada
+  - inicio: Date
+  - fim: Date?
+}
+
 class ConexaoProxima {
   - id: UUID
   - status: StatusConexao
   - solicitadaEm: DateTime
   - confirmadaEm: DateTime
+  - solicitanteId: UUID
   + confirmar(): void
   + recusar(): void
 }
 
-class ServicoBusca <<serviço>> {
-  + buscar(texto: String): List<Perfil>
+class SearchUseCase <<caso de uso>> {
+  + buscar(texto, modo, limite, offset): ResultadoBusca
 }
 
-class CalculadoraCaminhos <<serviço>> {
-  + calcular(origem: Perfil, destino: Perfil): Caminho
+class GraphUseCase <<caso de uso>> {
+  + snapshot(): Grafo
 }
 
 class Caminho {
-  - id: UUID
+  - userIds: List<UUID>
+  - vinculosContextuais: Integer
+  - saltos: Integer
 }
 
 class EtapaCaminho {
   - ordem: Integer
   - tipo: TipoVinculo
   - contexto: String
+  - origemId: UUID
+  - destinoId: UUID
+  - referenciaId: String
+}
+
+class Aresta {
+  - id: String
+  - origemId: UUID
+  - destinoId: UUID
+  - tipo: close | class | entity | ic
+  - contexto: JSON
+}
+
+class Grafo {
+  - perfis: Map<UUID, PerfilPublico>
+  - adjacencias: Map<UUID, List<Aresta>>
+}
+
+class EmbeddingPerfil {
+  - userId: UUID
+  - vetor: List<Float>
+  - modelo: String
+  - dimensao: Integer
+  - versaoTexto: Integer
+  - hashTexto: String
+  - status: pending | ready
+}
+
+class IndexProfilesUseCase <<caso de uso>> {
+  + atualizar(userId): void
+  + reindexar(): void
+}
+
+interface ProvedorEmbeddings {
+  + documento(texto, titulo): List<Float>
+  + consulta(texto): List<Float>
+}
+
+class GeminiEmbeddings <<adaptador REST>>
+
+class ResultadoBusca {
+  - resultados: List<PerfilPublico, similaridade, Caminho?>
+  - total: Integer
+  - grafo: JSON
 }
 
 Usuario "1" *-right- "1" Perfil : possui
@@ -110,14 +165,37 @@ Usuario "1" -up-> "0..*" Convite : envia
 Perfil "1" *-down- "0..*" Experiencia : registra
 Perfil "1" *-down- "0..*" ParticipacaoEntidade
 ParticipacaoEntidade "0..*" -down-> "1" Entidade
-IniciacaoCientifica "0..*" -left-> "2" Perfil : participantes
+Perfil "1" *-- "0..*" ParticipacaoPesquisa
+ParticipacaoPesquisa "0..*" --> "1" IniciacaoCientifica : projeto
+ParticipacaoPesquisa "0..*" --> "1" Usuario : orientador confirmado
 
 Perfil "2" -left- "0..10" ConexaoProxima : participa
 
-ServicoBusca .down.> Perfil
-CalculadoraCaminhos .down.> Perfil
-CalculadoraCaminhos .right.> Caminho
-Caminho "1" *-down- "1..*" EtapaCaminho
+SearchUseCase .down.> Perfil
+SearchUseCase ..> ResultadoBusca
+SearchUseCase ..> IndexProfilesUseCase
+SearchUseCase ..> GraphUseCase
+GraphUseCase .down.> Grafo : Dijkstra por custo lexicográfico
+GraphUseCase .right.> Caminho
+Caminho "1" *-down- "0..*" EtapaCaminho
 EtapaCaminho "0..*" -left-> "2" Perfil : liga
+Grafo *-- "0..*" Aresta
+IndexProfilesUseCase ..> EmbeddingPerfil : persiste e invalida por hash
+IndexProfilesUseCase ..> ProvedorEmbeddings
+SearchUseCase ..> ProvedorEmbeddings : apenas vetor da consulta
+GeminiEmbeddings ..|> ProvedorEmbeddings
+Usuario "1" -- "0..1" EmbeddingPerfil
+
+note bottom of Perfil
+  JSON dentro de users; identidade = user.id.
+  Participações ficam no perfil.
+  Campos opcionais permitem perfil parcial.
+end note
+
+note bottom of Caminho
+  Custo = (vínculos contextuais, saltos).
+  Calculado em memória; não persistido.
+  Ausência de caminho é null.
+end note
 
 @enduml
