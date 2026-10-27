@@ -3,7 +3,7 @@ import heapq
 from typing import Any
 
 from modules.connections.domain.errors import NetworkError
-from modules.graph.domain.profile import NetworkProfile
+from modules.auth.domain.profile import Profile
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class PathTree:
 
 
 class NetworkGraph:
-    def __init__(self, profiles: list[NetworkProfile], edges: list[Edge]):
+    def __init__(self, profiles: list[Profile], edges: list[Edge]):
         self.profiles = {p.id: p for p in profiles}
         self.edges = {edge.id: edge for edge in edges}
         self.adjacency: dict[str, list[tuple[str, Edge]]] = {p.id: [] for p in profiles}
@@ -65,7 +65,7 @@ class NetworkGraph:
         for neighbors in self.adjacency.values():
             neighbors.sort(key=lambda item: (item[0], item[1].type, item[1].id))
 
-    def require(self, user_id: str) -> NetworkProfile:
+    def require(self, user_id: str) -> Profile:
         if user_id not in self.profiles:
             raise NetworkError("Perfil inexistente ou inativo", 404)
         return self.profiles[user_id]
@@ -95,13 +95,13 @@ class NetworkGraph:
             if path:
                 users.update(path.user_ids)
                 edges.update((edge.id, edge) for edge in path.edges)
-        return {"nodes": [self.profiles[key].public() for key in sorted(users)],
+        return {"nodes": [self.profiles[key].to_network_public() for key in sorted(users)],
                 "edges": [edges[key].public() for key in sorted(edges)]}
 
     def close_network(self, origin: str) -> dict[str, Any]:
         self.require(origin)
         edges = [edge for _, edge in self.adjacency[origin] if edge.type == "close"]
         users = {origin, *(neighbor for neighbor, edge in self.adjacency[origin] if edge.type == "close")}
-        return {"nodes": [self.profiles[key].public() for key in sorted(users)],
+        return {"nodes": [self.profiles[key].to_network_public() for key in sorted(users)],
                 "edges": [edge.public() for edge in edges]}
 

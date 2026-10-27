@@ -1,33 +1,39 @@
-from dataclasses import asdict
 import hashlib
 import json
 
-from modules.graph.domain.profile import Catalogs, NetworkProfile
+from modules.graph.domain.catalogs import Catalogs
+from modules.auth.domain.profile import Profile
 
 
-TEXT_VERSION = 2
+TEXT_VERSION = 3
 
 
-def searchable_text(profile: NetworkProfile, catalogs: Catalogs) -> str:
+def searchable_text(profile: Profile, catalogs: Catalogs) -> str:
     """Whitelist explícita: não incorporar credenciais, foto ou campos futuros do perfil."""
-    data = asdict(profile)
-    data.pop("id")
-    data.pop("photo_url")
-    # Dados de participação privados/operacionais não entram no embedding.
+    data = {key: getattr(profile, key) for key in (
+        "name", "type", "course", "semester", "field", "bio", "entry_year",
+        "entry_semester", "class_group", "role", "company",
+    )}
     data["experiences"] = [{key: item.get(key) for key in
                             ("title", "organization", "type", "start_date", "end_date", "description")}
                            for item in profile.experiences]
-    data["entity_memberships"] = [{
-        **catalogs.entities.get(str(item.get("entity_id", "")), {}),
-        **{key: item.get(key) for key in ("role", "start_date", "end_date")},
-    } for item in profile.entity_memberships]
-    data["research_participations"] = [{
-        **catalogs.projects.get(str(item.get("project_id", "")), {}),
-        **{key: item.get(key) for key in ("role", "start_date", "end_date")},
-    } for item in profile.research_participations]
+    for output, ids, details, id_key, catalog, allowed in (
+        ("entity_memberships", profile.entity_ids, profile.entity_memberships, "entity_id",
+         catalogs.entities, ("name", "description")),
+        ("research_participations", profile.research_project_ids, profile.research_participations,
+         "project_id", catalogs.projects, ("title", "theme", "description")),
+    ):
+        data[output] = []
+        for identifier in sorted(ids):
+            participations = [item for item in details if item.get(id_key) == identifier] or [{}]
+            for item in participations:
+                data[output].append({
+                    **{key: catalog.get(identifier, {}).get(key) for key in allowed},
+                    **{key: item.get(key) for key in ("role", "start_date", "end_date")},
+                })
     return json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
 
 
-def source_hash(profile: NetworkProfile, catalogs: Catalogs) -> str:
+def source_hash(profile: Profile, catalogs: Catalogs) -> str:
     return hashlib.sha256(searchable_text(profile, catalogs).encode()).hexdigest()
 

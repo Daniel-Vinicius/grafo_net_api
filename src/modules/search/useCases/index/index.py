@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from modules.graph.domain.profile import Catalogs, NetworkProfile
+from modules.graph.domain.catalogs import Catalogs
+from modules.auth.domain.profile import Profile
 from modules.graph.repositories.contract import ProfileRepository
 from modules.search.domain.profile_text import TEXT_VERSION, searchable_text, source_hash
 from modules.search.embeddings import EmbeddingProvider, EmbeddingUnavailable, normalized
@@ -12,7 +13,7 @@ class IndexProfilesUseCase:
     def __init__(self, profiles: ProfileRepository, repository: EmbeddingRepository, provider: EmbeddingProvider):
         self.profiles, self.repository, self.provider = profiles, repository, provider
 
-    def current(self, record: dict[str, Any] | None, profile: NetworkProfile, catalogs: Catalogs) -> bool:
+    def current(self, record: dict[str, Any] | None, profile: Profile, catalogs: Catalogs) -> bool:
         return bool(record and record.get("status") == "ready"
                     and record.get("model") == self.provider.model
                     and record.get("dimensions") == self.provider.dimensions
@@ -28,9 +29,8 @@ class IndexProfilesUseCase:
                 continue
             if reference:
                 kind, identifier = reference
-                memberships = profile.entity_memberships if kind == "entity" else profile.research_participations
-                key = "entity_id" if kind == "entity" else "project_id"
-                if not any(str(item.get(key)) == identifier for item in memberships):
+                links = profile.entity_ids if kind == "entity" else profile.research_project_ids
+                if identifier not in links:
                     continue
             if not force and self.current(records.get(profile.id), profile, catalogs):
                 counts["unchanged"] += 1
