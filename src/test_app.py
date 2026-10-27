@@ -145,7 +145,7 @@ def test_registration_hook_runs_after_save_and_index_failure_preserves_user(netw
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     invites.save(Invite("i", "new@insper.edu.br", token_hash(token), "a", now, now + timedelta(days=1)))
-    created = RegisterUseCase(users, invites).register("Nova", "new@insper.edu.br", "senha1234", token)
+    created = RegisterUseCase(users, invites).register({"name": "Pessoa", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio de teste"}, "new@insper.edu.br", "senha1234", token)
     profiles.profiles.append(NetworkProfile(created["id"], "Nova"))
     provider.unavailable = True
     profile_saved(app, created["id"])

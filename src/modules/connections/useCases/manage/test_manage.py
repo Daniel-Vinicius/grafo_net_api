@@ -81,7 +81,7 @@ def invited_registration(users, repository, sender: str | None = "a"):
 def test_invitation_creates_accepted_friendship_and_bootstrap_does_not(setup):
     users, repository, _ = setup
     service, invites, invite, token = invited_registration(users, repository)
-    result = service.register("Nova", invite.email, "senha1234", token)
+    result = service.register({"name": "Nova", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio"}, invite.email, "senha1234", token)
     friendship = repository.find_pair("a", result["id"])
     assert friendship and friendship.status == "accepted"
     consumed = invites.find_by_hash(invite.token_hash)
@@ -89,7 +89,7 @@ def test_invitation_creates_accepted_friendship_and_bootstrap_does_not(setup):
     fresh = InMemoryUserRepository([])
     repository = InMemoryConnectionRepository()
     service, invites, invite, token = invited_registration(fresh, repository, None)
-    service.register("Primeira", invite.email, "senha1234", token)
+    service.register({"name": "Primeira", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio"}, invite.email, "senha1234", token)
     assert repository.accepted() == []
 
 
@@ -105,7 +105,7 @@ def test_unavailable_inviter_preserves_invite_and_does_not_create_user(setup, re
     else:
         users._users.pop(0)
     with pytest.raises(NetworkError):
-        service.register("Nova", invite.email, "senha1234", token)
+        service.register({"name": "Nova", "course_id": "computer-science", "semester": 1, "field_id": "technology", "bio": "Bio"}, invite.email, "senha1234", token)
     assert users.find_by_email(invite.email) is None
     pending = invites.find_by_hash(invite.token_hash)
     assert pending is not None and pending.used_at is None

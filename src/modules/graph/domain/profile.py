@@ -10,6 +10,8 @@ class NetworkProfile:
     name: str
     type: str = ""
     course: str = ""
+    semester: int | None = None
+    field: str = ""
     entry_year: int | None = None
     entry_semester: int | None = None
     class_group: str = ""

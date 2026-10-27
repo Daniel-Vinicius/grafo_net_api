@@ -5,7 +5,7 @@ import json
 from modules.graph.domain.profile import Catalogs, NetworkProfile
 
 
-TEXT_VERSION = 1
+TEXT_VERSION = 2
 
 
 def searchable_text(profile: NetworkProfile, catalogs: Catalogs) -> str:

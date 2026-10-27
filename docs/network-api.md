@@ -15,82 +15,47 @@ sem autenticação e os cabeçalhos `Authorization` e `Content-Type`.
 perfis ativos são visíveis aos usuários autenticados neste MVP. Credenciais e
 e-mail não são enviados à busca, ao Gemini ou às respostas da rede.
 
-O time de auth/perfil mantém a edição destes campos de `users.profile`:
+Os dados acadêmicos ficam em `profiles`, com `_id` igual ao usuário, e não mais
+em `users.profile`. O adaptador de rede consulta ids de usuários ativos e lê uma
+projeção explícita de nome, curso, semestre, área, bio, entidades e pesquisas.
+E-mail, senha, versão de sessão e referência de foto privada não entram nessa visão.
+
+O perfil acadêmico é, por exemplo:
 
 ```json
 {
+  "_id": "user-id",
   "name": "Ana",
-  "type": "aluno",
-  "course": "Ciência da Computação",
-  "entry_year": 2024,
-  "entry_semester": 1,
-  "class_group": "A",
+  "course_id": "computer-science",
+  "semester": 3,
+  "field_id": "technology",
   "bio": "Experiência em dados e fintechs",
-  "role": "Estagiária",
-  "company": "Empresa",
-  "photo_url": "https://example.com/photo.jpg",
-  "interests": ["Dados", "Fintech"],
-  "experiences": [
-    {
-      "title": "Análise de dados",
-      "organization": "Empresa",
-      "description": "Modelagem de risco",
-      "start_date": "2025-01-01",
-      "end_date": null
-    }
-  ],
-  "entity_memberships": [
-    {
-      "entity_id": "code-id",
-      "role": "membro",
-      "start_date": "2024-02-01",
-      "end_date": null
-    }
-  ],
-  "research_participations": [
-    {
-      "id": "participation-id",
-      "project_id": "research-id",
-      "advisor_user_id": "professor-user-id",
-      "status": "confirmed",
-      "role": "pesquisadora",
-      "start_date": "2025-02-01",
-      "end_date": null
-    }
-  ]
+  "entity_ids": ["insper-code"],
+  "research_project_ids": ["research-id"]
 }
 ```
 
-`type` pode ser `aluno`, `alumni` ou `professor`. `entry_year` e
-`entry_semester` são inteiros; datas usam `YYYY-MM-DD` (o leitor também aceita
-datas BSON). Ausência dos campos opcionais não impede cadastro ou busca.
-Listas ausentes ou nulas são tratadas como vazias.
+O leitor resolve curso e área pelos catálogos e converte os ids para a estrutura
+de participações usada pela indexação. `entities` fornece nomes;
+`research_projects` fornece título e descrição. O semestre atual não equivale a
+semestre de ingresso. Vínculos simples de entidade/pesquisa não comprovam período
+de participação, turma ou orientação confirmada: o grafo mantém suas regras de
+validação e não inventa essas informações. As regras de contextos do domínio
+continuam disponíveis quando os dados necessários são fornecidos ao grafo.
 
-`entities` contém `_id`, `name` e `description`. `research_projects` contém
-`_id`, `title`, `theme` e `description`. Não duplicar participantes nesses
-catálogos. IDs são comparados por sua representação textual.
+O DTO `NetworkProfile` continua separado de `auth.domain.Profile`, preservando os
+contratos públicos de `/graph` e `/search`. Foto não é disponibilizada por essas
+rotas: `photo_url` permanece vazio e o download exige a autenticação do dono.
 
-O time de auth/perfil valida e persiste as participações. Apenas o orientador
-identificado pode confirmar a IC, alterando `status` para `confirmed`; esse
-fluxo e suas telas pertencem ao time de perfis. A rede apenas consome esse
-estado, sem inferir orientação por nome, tema ou projeto em comum.
+Cadastro, edição de perfil e vínculo/criação de pesquisa notificam `profile_saved`
+após persistir os dados. Edição de pesquisa notifica `project_saved`, reindexando
+os perfis vinculados. Falha externa deixa indexação pendente sem desfazer o perfil;
+o hash dos dados impede servir vetores desatualizados. A versão do texto passa a
+2, exigindo reindexação dos vetores anteriores. A exclusão de conta remove o vetor
+e as conexões da conta, preservando os projetos compartilhados sem criador.
 
-Após salvar o perfil, o endpoint de edição deve chamar:
-
-```python
-from flask import current_app
-from modules.search.hooks import profile_saved
-
-# Primeiro persistir a alteração, depois notificar a busca:
-profile_saved(current_app, user_id)
-```
-
-O cadastro existente já chama esse hook. Ele não desfaz o salvamento em caso
-de falha externa. Alterações em foto, senha ou outros dados fora do texto
-pesquisável não geram novos vetores. Enquanto não houver integração do endpoint
-de edição, usar o comando de reindexação abaixo. Os novos campos do perfil não
-foram adicionados ao `auth.domain.Profile`: o DTO de leitura em `graph/domain/profile.py`
-permite que os dois times trabalhem separadamente.
+As extensões Flask têm responsabilidades distintas: `auth_profile_repository`
+serve edição pessoal e fotos; `profile_repository` é a projeção pública da rede.
 
 ## Conexões e cadastro por convite
 
@@ -119,7 +84,7 @@ recusar ou remover; a exclusão permite nova solicitação futura. O limite de
 10 vale somente para amizades aceitas, não para solicitações ou contextos.
 
 No cadastro, os repositórios Mongo e em memória validam se o convidador está
-ativo e tem vaga. O Mongo cria conta, consome convite e insere a amizade aceita
+ativo e tem vaga. O Mongo cria conta e perfil, consome convite e insere a amizade aceita
 na transação de cadastro que já existia. Uma falha preserva o convite.
 Bootstrap não cria amizade. Não foram adicionadas reservas de vagas nem
 mecanismos para aceites simultâneos.
@@ -264,8 +229,7 @@ O corte inicial de 0.50 é experimental; ajustar com os dados da demonstração.
 
 Perfis com vetor ausente, pendente, incompatível ou desatualizado são excluídos;
 `indexing_pending` informa quantos candidatos ativos foram excluídos por isso.
-Mesmo quando a edição ainda não chama o hook, o hash é conferido contra os dados
-atuais. A busca nunca reconstrói os embeddings dos perfis durante a consulta.
+O hash é conferido contra os dados atuais mesmo quando a atualização do vetor falha. A busca nunca reconstrói os embeddings dos perfis durante a consulta.
 
 ## Gemini e operação
 

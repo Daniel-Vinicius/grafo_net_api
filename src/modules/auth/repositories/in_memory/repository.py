@@ -5,6 +5,7 @@ from threading import RLock
 from modules.auth.domain.errors import DuplicateEmailError, InvalidInviteError
 from modules.auth.domain.invite import Invite
 from modules.auth.domain.user import User
+from modules.auth.domain.profile import Profile
 from modules.connections.domain.connection import Connection
 from modules.connections.repositories.contract import ConnectionRepository
 from modules.connections.repositories.in_memory.repository import InMemoryConnectionRepository
@@ -15,6 +16,7 @@ class InMemoryUserRepository:
     def __init__(self, users: list[User]):
         self._users = users
         self._lock = RLock()
+        self._profiles: dict[str, Profile] = {}
 
     def find_by_email(self, email: str) -> User | None:
         with self._lock:
@@ -60,7 +62,7 @@ class InMemoryInviteRepository:
             if invite is not None and invite.used_at is None:
                 del self._invites[invite_id]
 
-    def register_with_invite(self, user: User, token_hash: str) -> None:
+    def register_with_invite(self, user: User, profile: Profile, token_hash: str) -> None:
         with self._users._lock:
             invite = self.find_by_hash(token_hash)
             if invite is None:
@@ -69,11 +71,14 @@ class InMemoryInviteRepository:
             invite.validate_for(user.email, now)
             if self._users.find_by_email(user.email) is not None:
                 raise DuplicateEmailError()
+            if profile.id != user.id or user.id in self._users._profiles:
+                raise ValueError("Perfil incompatível")
             connection = None
             if invite.created_by is not None:
                 ConnectionUseCase(self.connections, self._users).validate_inviter(invite.created_by)
                 connection = Connection.create(invite.created_by, user.id, accepted=True)
                 self.connections.save(connection)
             consumed = replace(invite, used_at=now)
+            self._users._profiles[user.id] = profile
             self._users._users.append(user)
             self._invites[invite.id] = consumed
