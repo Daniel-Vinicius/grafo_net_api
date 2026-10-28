@@ -17,11 +17,20 @@ class Connection:
     def create(cls, sender: str, target: str, accepted: bool = False) -> "Connection":
         a, b = sorted((sender, target))
         now = datetime.now(timezone.utc)
-        return cls(str(uuid4()), a, b, sender, "accepted" if accepted else "pending",
-                   now, now if accepted else None)
+        return cls(
+            str(uuid4()),
+            a,
+            b,
+            sender,
+            "accepted" if accepted else "pending",
+            now,
+            now if accepted else None,
+        )
 
     def public(self) -> dict:
         result = asdict(self)
         result["created_at"] = self.created_at.isoformat()
-        result["accepted_at"] = self.accepted_at.isoformat() if self.accepted_at else None
+        result["accepted_at"] = (
+            self.accepted_at.isoformat() if self.accepted_at else None
+        )
         return result

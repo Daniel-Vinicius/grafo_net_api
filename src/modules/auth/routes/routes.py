@@ -1,171 +1,402 @@
 from datetime import datetime, timezone
+from io import BytesIO
 
-from flask import Blueprint, Flask, jsonify, request
-from flask_jwt_extended import create_access_token, current_user, get_jwt, get_jwt_identity, jwt_required
-from pymongo.errors import PyMongoError
-from werkzeug.exceptions import RequestEntityTooLarge
+from flask import Blueprint, jsonify, request, send_file
 
-from database.connection import create_database
-from modules.auth.domain.errors import (
-    AuthenticationRequiredError, BootstrapForbiddenError, DuplicateEmailError,
-    EmailDeliveryError, ValidationError, NotFoundError, ForbiddenError, PayloadTooLargeError,
+from infra.http.authentication import (
+    account,
+    authenticated,
+    claims,
+    identity,
+    optional_authentication,
 )
-from modules.auth.email import EmailSender, SMTPEmailSender
-from modules.auth.jwt import configure_jwt
-from modules.auth.repositories.contract import InviteRepository, TokenRepository, UserRepository, ProfileRepository, PhotoStore
-from modules.auth.repositories.in_memory.repository import InMemoryUserRepository, InMemoryInviteRepository
-from modules.auth.repositories.in_memory.profiles import InMemoryProfileRepository, InMemoryPhotoStore
-from modules.auth.repositories.mongo.profiles import MongoProfileRepository, MongoPhotoStore
-from modules.auth.routes.profile_routes import register_profile_routes
-from modules.auth.repositories.mongo.repository import MongoInviteRepository, MongoTokenRepository, MongoUserRepository
-from modules.auth.useCases.invite.invite import InviteUseCase
-from modules.auth.useCases.login.login import AuthUseCase
-from modules.auth.useCases.register.register import RegisterUseCase
-
-from modules.connections.domain.errors import NetworkError
-from modules.connections.repositories.contract import ConnectionRepository
-from modules.connections.repositories.mongo.repository import MongoConnectionRepository
-from modules.search.hooks import profile_saved
+from infra.http.boundary import json_body
+from infra.http.contract import Actions
+from infra.http.documentation import documented
+from infra.images.contract import PHOTO_LIMIT
+from infra.security.tokens.contract import TokenIssuer
+from modules.auth.domain.errors import ValidationError
 
 
-def create_auth_routes(
-    app: Flask,
-    users_repository: UserRepository | None = None,
-    tokens_repository: TokenRepository | None = None,
-    invites_repository: InviteRepository | None = None,
-    mailer: EmailSender | None = None,
-    profiles_repository: ProfileRepository | None = None,
-    photos: PhotoStore | None = None,
-    connections_repository: ConnectionRepository | None = None,
-) -> Blueprint:
-    if users_repository is None or tokens_repository is None or invites_repository is None:
-        database = create_database(app.config["MONGO_URI"], app.config["MONGO_DB"])
-        app.extensions["mongo_client"] = database.client
-        app.extensions["mongo_database"] = database
-        if connections_repository is None:
-            connections_repository = MongoConnectionRepository(database)
-        if profiles_repository is None:
-            profiles_repository = MongoProfileRepository(database)
-        if photos is None:
-            photos = MongoPhotoStore(database)
-        if users_repository is None:
-            users_repository = MongoUserRepository(database)
-        if tokens_repository is None:
-            tokens_repository = MongoTokenRepository(database)
-        if invites_repository is None:
-            invites_repository = MongoInviteRepository(database)
-    if profiles_repository is None:
-        if not isinstance(users_repository, InMemoryUserRepository) or not isinstance(invites_repository, InMemoryInviteRepository):
-            raise ValueError("Forneça profiles_repository ao injetar repositórios personalizados")
-        profiles_repository = InMemoryProfileRepository(users_repository, invites_repository)
-    if photos is None:
-        photos = InMemoryPhotoStore()
-    app.extensions["auth_profile_repository"] = profiles_repository
-    app.extensions["photo_store"] = photos
-    if mailer is None:
-        mailer = SMTPEmailSender(
-            app.config["SMTP_HOST"], app.config["SMTP_PORT"], app.config["SMTP_FROM"],
-            app.config["SMTP_USERNAME"], app.config["SMTP_PASSWORD"], app.config["SMTP_USE_TLS"],
-        )
-    app.extensions["user_repository"] = users_repository
-    app.extensions["connection_repository"] = connections_repository if connections_repository is not None else getattr(invites_repository, "connections", None)
-    configure_jwt(app, users_repository, tokens_repository)
-    auth = AuthUseCase(users_repository, tokens_repository)
-    registration = RegisterUseCase(users_repository, invites_repository)
-    invitations = InviteUseCase(
-        users_repository, invites_repository, mailer, app.config["FRONTEND_URL"], app.config["BOOTSTRAP_KEY"],
-    )
+def create_routes(actions: Actions, tokens: TokenIssuer):
     blueprint = Blueprint("auth", __name__)
 
-    @blueprint.errorhandler(NetworkError)
-    def network_error(error: NetworkError):
-        return jsonify({"message": str(error)}), error.status
-
-    @blueprint.errorhandler(NotFoundError)
-    def not_found(error):
-        return jsonify({"message": str(error)}), 404
-
-    @blueprint.errorhandler(ForbiddenError)
-    def forbidden(error):
-        return jsonify({"message": str(error)}), 403
-
-    @blueprint.errorhandler(PayloadTooLargeError)
-    @blueprint.errorhandler(RequestEntityTooLarge)
-    def too_large(error):
-        return jsonify({"message": "Foto deve ter até 2 MiB"}), 413
-
-    def json_body() -> dict:
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            raise ValidationError("Envie um objeto JSON válido")
-        return data
-
-    @blueprint.errorhandler(ValidationError)
-    def invalid_input(error):
-        return jsonify({"message": str(error)}), 400
-
-    @blueprint.errorhandler(DuplicateEmailError)
-    def duplicate_email(error):
-        return jsonify({"message": str(error)}), 409
-
-    @blueprint.errorhandler(AuthenticationRequiredError)
-    def authentication_required(error):
-        return jsonify({"message": str(error)}), 401
-
-    @blueprint.errorhandler(BootstrapForbiddenError)
-    def bootstrap_forbidden(error):
-        return jsonify({"message": str(error)}), 403
-
-    @blueprint.errorhandler(EmailDeliveryError)
-    @blueprint.errorhandler(PyMongoError)
-    def unavailable(error):
-        message = "Não foi possível enviar o convite" if isinstance(error, EmailDeliveryError) else "Banco indisponível"
-        return jsonify({"message": message}), 503
-
-    @blueprint.post("/invitations")
-    @jwt_required(optional=True)
-    def issue_invite():
-        data = json_body()
-        invite = invitations.issue(data.get("email"), get_jwt_identity(), request.headers.get("X-Bootstrap-Key"))
-        return jsonify(invite), 201
+    @blueprint.post("/auth/login")
+    @documented(
+        "Autenticação",
+        "Entrar",
+        response="LoginResult",
+        body="LoginInput",
+        status=200,
+        public=True,
+        multipart=False,
+    )
+    def login():
+        data = json_body({"email", "password"})
+        user = actions.login.execute(data.get("email"), data.get("password"))
+        return jsonify(
+            {
+                "access_token": tokens.issue(user.id, user.auth_version),
+                "user": user.to_public(),
+            }
+        )
 
     @blueprint.post("/auth/register")
+    @documented(
+        "Autenticação",
+        "Cadastrar com convite",
+        response="User",
+        body="RegisterInput",
+        status=201,
+        public=True,
+        multipart=False,
+    )
     def register():
-        data = json_body()
-        identity = registration.register(
-            data.get("profile"), data.get("email"), data.get("password"), data.get("invite_token"),
-        )
-        profile_saved(app, identity["id"])
-        return jsonify(identity), 201
-
-    @blueprint.post("/auth/login")
-    def login():
-        data = json_body()
-        email = data.get("email")
-        password = data.get("password")
-        if not isinstance(email, str) or not isinstance(password, str):
-            raise ValidationError("E-mail e senha devem ser textos")
-        if not email.strip() or not password:
-            raise ValidationError("E-mail e senha são obrigatórios")
-        try:
-            authenticated_user = auth.authenticate_user(email, password)
-            identity = authenticated_user.to_public()
-        except ValueError:
-            return jsonify({"message": "Usuario ou Senha inválidas"}), 401
-        token = create_access_token(identity=identity["id"], additional_claims={"auth_version": authenticated_user.auth_version})
-        return jsonify({"access_token": token, "user": identity})
-
-    @blueprint.get("/auth/me")
-    @jwt_required()
-    def me():
-        return jsonify(current_user.to_public())
+        return jsonify(actions.register.execute(json_body())), 201
 
     @blueprint.post("/auth/logout")
-    @jwt_required()
+    @documented(
+        "Autenticação",
+        "Encerrar sessão",
+        response=None,
+        body=None,
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
     def logout():
-        token = get_jwt()
-        auth.logout(token["jti"], datetime.fromtimestamp(token["exp"], timezone.utc))
+        payload = claims()
+        actions.logout.execute(
+            payload["jti"], datetime.fromtimestamp(payload["exp"], timezone.utc)
+        )
         return "", 204
 
-    register_profile_routes(blueprint, profiles_repository, photos)
+    @blueprint.get("/auth/me")
+    @documented(
+        "Autenticação",
+        "Consultar identidade",
+        response="User",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def me():
+        return jsonify(actions.getCurrentUser.execute(account()))
+
+    @blueprint.post("/invitations")
+    @documented(
+        "Convites",
+        "Enviar convite ou iniciar bootstrap",
+        response="Invitation",
+        body="InvitationInput",
+        status=201,
+        public=True,
+        multipart=False,
+    )
+    @optional_authentication
+    def invite():
+        data = json_body({"email"})
+        return jsonify(
+            actions.issueInvitation.execute(
+                data.get("email"), identity(), request.headers.get("X-Bootstrap-Key")
+            )
+        ), 201
+
+    @blueprint.get("/profiles/options")
+    @documented(
+        "Perfis",
+        "Consultar opções de perfil",
+        response="ProfileOptions",
+        body=None,
+        status=200,
+        public=True,
+        multipart=False,
+    )
+    def profile_options():
+        return jsonify(actions.getProfileOptions.execute())
+
+    @blueprint.get("/profiles/me")
+    @documented(
+        "Perfis",
+        "Consultar próprio perfil",
+        response="Profile",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def own_profile():
+        return jsonify(actions.getProfile.execute(identity()))
+
+    @blueprint.patch("/profiles/me")
+    @documented(
+        "Perfis",
+        "Editar próprio perfil",
+        response="Profile",
+        body="ProfileUpdate",
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def update_profile():
+        return jsonify(actions.updateProfile.execute(identity(), json_body()))
+
+    @blueprint.get("/profiles/<identifier>")
+    @documented(
+        "Perfis",
+        "Consultar perfil ativo",
+        response="Profile",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def profile(identifier):
+        return jsonify(actions.getProfile.execute(identifier))
+
+    @blueprint.get("/entities")
+    @documented(
+        "Entidades",
+        "Listar entidades",
+        response="Entities",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def entities():
+        return jsonify(actions.listEntities.execute())
+
+    @blueprint.get("/research-projects")
+    @documented(
+        "Pesquisas",
+        "Listar pesquisas",
+        response="Projects",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def projects():
+        return jsonify(actions.listResearchProjects.execute())
+
+    @blueprint.post("/research-projects")
+    @documented(
+        "Pesquisas",
+        "Criar pesquisa e vincular ao perfil",
+        response="Project",
+        body="ProjectInput",
+        status=201,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def create_project():
+        return jsonify(
+            actions.createResearchProject.execute(identity(), json_body())
+        ), 201
+
+    @blueprint.get("/research-projects/<identifier>")
+    @documented(
+        "Pesquisas",
+        "Consultar pesquisa",
+        response="Project",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def project(identifier):
+        return jsonify(actions.getResearchProject.execute(identifier))
+
+    @blueprint.patch("/research-projects/<identifier>")
+    @documented(
+        "Pesquisas",
+        "Editar pesquisa própria",
+        response="Project",
+        body="ProjectUpdate",
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def update_project(identifier):
+        return jsonify(
+            actions.updateResearchProject.execute(identity(), identifier, json_body())
+        )
+
+    @blueprint.get("/research-participations")
+    @documented(
+        "Orientações",
+        "Listar orientações recebidas",
+        response="Participations",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def participations():
+        return jsonify(
+            actions.listResearchParticipations.execute(
+                identity(), request.args.get("status", "pending")
+            )
+        )
+
+    @blueprint.patch("/research-participations/<identifier>")
+    @documented(
+        "Orientações",
+        "Confirmar ou rejeitar orientação",
+        response=None,
+        body="ReviewInput",
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def review_participation(identifier):
+        actions.reviewResearchParticipation.execute(identity(), identifier, json_body())
+        return "", 204
+
+    @blueprint.patch("/account/email")
+    @documented(
+        "Conta",
+        "Alterar email",
+        response=None,
+        body="EmailInput",
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def change_email():
+        actions.changeEmail.execute(account(), json_body())
+        return "", 204
+
+    @blueprint.patch("/account/password")
+    @documented(
+        "Conta",
+        "Alterar password",
+        response=None,
+        body="PasswordInput",
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def change_password():
+        actions.changePassword.execute(account(), json_body())
+        return "", 204
+
+    @blueprint.delete("/account")
+    @documented(
+        "Conta",
+        "Excluir própria conta",
+        response=None,
+        body="CurrentPasswordInput",
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def delete_account():
+        actions.deleteAccount.execute(account(), json_body())
+        return "", 204
+
+    @blueprint.get("/profiles/me/photo")
+    @documented(
+        "Fotos",
+        "Obter própria foto",
+        response=None,
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def own_photo():
+        photo_id, content = actions.getPhoto.execute(identity())
+        response = send_file(
+            BytesIO(content),
+            mimetype="image/png",
+            download_name="profile.png",
+            etag=photo_id,
+            max_age=300,
+        )
+        response.headers["Cache-Control"] = "private, max-age=300"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response.make_conditional(request)
+
+    @blueprint.get("/profiles/<identifier>/photo")
+    @documented(
+        "Fotos",
+        "Obter foto de perfil ativo",
+        response=None,
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def photo(identifier):
+        photo_id, content = actions.getPhoto.execute(identifier)
+        response = send_file(
+            BytesIO(content),
+            mimetype="image/png",
+            download_name="profile.png",
+            etag=photo_id,
+            max_age=300,
+        )
+        response.headers["Cache-Control"] = "private, max-age=300"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response.make_conditional(request)
+
+    @blueprint.put("/profiles/me/photo")
+    @documented(
+        "Fotos",
+        "Enviar JPEG/PNG de até 2 MiB",
+        response=None,
+        body="PhotoInput",
+        status=204,
+        public=False,
+        multipart=True,
+    )
+    @authenticated
+    def upload_photo():
+        request.max_content_length = PHOTO_LIMIT + 64 * 1024
+        upload = request.files.get("photo")
+        if (
+            upload is None
+            or set(request.files) != {"photo"}
+            or len(request.files.getlist("photo")) != 1
+            or request.form
+        ):
+            raise ValidationError("Envie uma imagem no campo photo")
+        actions.uploadPhoto.execute(identity(), upload.stream.read(PHOTO_LIMIT + 1))
+        return "", 204
+
+    @blueprint.delete("/profiles/me/photo")
+    @documented(
+        "Fotos",
+        "Remover própria foto",
+        response=None,
+        body=None,
+        status=204,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def delete_photo():
+        actions.deletePhoto.execute(identity())
+        return "", 204
+
     return blueprint
