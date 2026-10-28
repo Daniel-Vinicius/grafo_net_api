@@ -1,8 +1,8 @@
-from dataclasses import dataclass
 import heapq
+from dataclasses import dataclass
 from typing import Any
 
-from modules.connections.domain.errors import NetworkError
+from modules.auth.domain.errors import NotFoundError
 from modules.auth.domain.profile import Profile
 
 
@@ -19,8 +19,13 @@ class Edge:
         return int(self.type != "close")
 
     def public(self) -> dict[str, Any]:
-        return {"id": self.id, "source": self.source, "target": self.target,
-                "type": self.type, "context": self.context}
+        return {
+            "id": self.id,
+            "source": self.source,
+            "target": self.target,
+            "type": self.type,
+            "context": self.context,
+        }
 
 
 @dataclass(frozen=True)
@@ -30,16 +35,28 @@ class Path:
     cost: tuple[int, int]
 
     def public(self) -> dict[str, Any]:
-        return {"user_ids": list(self.user_ids),
-                "steps": [{**edge.public(), "order": i + 1,
-                           "source": self.user_ids[i], "target": self.user_ids[i + 1]}
-                          for i, edge in enumerate(self.edges)],
-                "cost": {"contextual_edges": self.cost[0], "hops": self.cost[1]}}
+        return {
+            "user_ids": list(self.user_ids),
+            "steps": [
+                {
+                    "edge_id": edge.id,
+                    "order": i + 1,
+                    "source": self.user_ids[i],
+                    "target": self.user_ids[i + 1],
+                }
+                for i, edge in enumerate(self.edges)
+            ],
+            "cost": {"contextual_edges": self.cost[0], "hops": self.cost[1]},
+        }
 
 
 class PathTree:
-    def __init__(self, origin: str, costs: dict[str, tuple[int, int]],
-                 previous: dict[str, tuple[str, Edge]]):
+    def __init__(
+        self,
+        origin: str,
+        costs: dict[str, tuple[int, int]],
+        previous: dict[str, tuple[str, Edge]],
+    ):
         self.origin, self.costs, self.previous = origin, costs, previous
 
     def path_to(self, target: str) -> Path | None:
@@ -54,7 +71,8 @@ class PathTree:
 
 
 class NetworkGraph:
-    def __init__(self, profiles: list[Profile], edges: list[Edge]):
+    def __init__(self, profiles: list[Profile], edges: list[Edge], catalogs=None):
+        self.catalogs = catalogs
         self.profiles = {p.id: p for p in profiles}
         self.edges = {edge.id: edge for edge in edges}
         self.adjacency: dict[str, list[tuple[str, Edge]]] = {p.id: [] for p in profiles}
@@ -67,7 +85,7 @@ class NetworkGraph:
 
     def require(self, user_id: str) -> Profile:
         if user_id not in self.profiles:
-            raise NetworkError("Perfil inexistente ou inativo", 404)
+            raise NotFoundError("Perfil inexistente ou inativo")
         return self.profiles[user_id]
 
     def paths_from(self, origin: str) -> PathTree:
@@ -87,21 +105,44 @@ class NetworkGraph:
                     heapq.heappush(queue, (*candidate, neighbor))
         return PathTree(origin, costs, previous)
 
-    def visualization(self, origin: str, paths: list[Path | None],
-                      targets: list[str]) -> dict[str, Any]:
+    def visualization(
+        self, origin: str, paths: list[Path | None], targets: list[str]
+    ) -> dict[str, Any]:
         users = {origin, *targets}
         edges: dict[str, Edge] = {}
         for path in paths:
             if path:
                 users.update(path.user_ids)
                 edges.update((edge.id, edge) for edge in path.edges)
-        return {"nodes": [self.profiles[key].to_network_public() for key in sorted(users)],
-                "edges": [edges[key].public() for key in sorted(edges)]}
+        return {
+            "nodes": [
+                self.profiles[key].to_dict(
+                    self.catalogs.entities if self.catalogs else {},
+                    self.catalogs.projects if self.catalogs else {},
+                )
+                for key in sorted(users)
+            ],
+            "edges": [edges[key].public() for key in sorted(edges)],
+        }
 
     def close_network(self, origin: str) -> dict[str, Any]:
         self.require(origin)
         edges = [edge for _, edge in self.adjacency[origin] if edge.type == "close"]
-        users = {origin, *(neighbor for neighbor, edge in self.adjacency[origin] if edge.type == "close")}
-        return {"nodes": [self.profiles[key].to_network_public() for key in sorted(users)],
-                "edges": [edge.public() for edge in edges]}
-
+        users = {
+            origin,
+            *(
+                neighbor
+                for neighbor, edge in self.adjacency[origin]
+                if edge.type == "close"
+            ),
+        }
+        return {
+            "nodes": [
+                self.profiles[key].to_dict(
+                    self.catalogs.entities if self.catalogs else {},
+                    self.catalogs.projects if self.catalogs else {},
+                )
+                for key in sorted(users)
+            ],
+            "edges": [edge.public() for edge in edges],
+        }
