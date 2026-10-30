@@ -1,39 +1,82 @@
 import hashlib
 import json
+from dataclasses import asdict
 
-from modules.graph.domain.catalogs import Catalogs
 from modules.auth.domain.profile import Profile
+from modules.graph.domain.catalogs import Catalogs
 
-
-TEXT_VERSION = 3
+TEXT_VERSION = 4
 
 
 def searchable_text(profile: Profile, catalogs: Catalogs) -> str:
-    """Whitelist explícita: não incorporar credenciais, foto ou campos futuros do perfil."""
-    data = {key: getattr(profile, key) for key in (
-        "name", "type", "course", "semester", "field", "bio", "entry_year",
-        "entry_semester", "class_group", "role", "company",
-    )}
-    data["experiences"] = [{key: item.get(key) for key in
-                            ("title", "organization", "type", "start_date", "end_date", "description")}
-                           for item in profile.experiences]
-    for output, ids, details, id_key, catalog, allowed in (
-        ("entity_memberships", profile.entity_ids, profile.entity_memberships, "entity_id",
-         catalogs.entities, ("name", "description")),
-        ("research_participations", profile.research_project_ids, profile.research_participations,
-         "project_id", catalogs.projects, ("title", "theme", "description")),
+    data = {
+        key: getattr(profile, key)
+        for key in (
+            "name",
+            "type",
+            "course",
+            "semester",
+            "field",
+            "bio",
+            "entry_year",
+            "entry_semester",
+            "class_group",
+            "role",
+            "company",
+        )
+    }
+    data["experiences"] = [
+        {key: value for key, value in asdict(item).items() if key != "id"}
+        for item in profile.experiences
+    ]
+    for name, identifiers, details, reference, catalog, keys in (
+        (
+            "entities",
+            profile.entity_ids,
+            profile.entity_memberships,
+            "entity_id",
+            catalogs.entities,
+            ("name", "description"),
+        ),
+        (
+            "projects",
+            profile.research_project_ids,
+            profile.research_participations,
+            "project_id",
+            catalogs.projects,
+            ("title", "description"),
+        ),
     ):
-        data[output] = []
-        for identifier in sorted(ids):
-            participations = [item for item in details if item.get(id_key) == identifier] or [{}]
-            for item in participations:
-                data[output].append({
-                    **{key: catalog.get(identifier, {}).get(key) for key in allowed},
-                    **{key: item.get(key) for key in ("role", "start_date", "end_date")},
-                })
-    return json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
+        data[name] = []
+        for identifier in sorted(identifiers):
+            records = [
+                item for item in details if getattr(item, reference) == identifier
+            ]
+            data[name].append(
+                {
+                    **{key: catalog.get(identifier, {}).get(key) for key in keys},
+                    "participations": [
+                        {
+                            key: getattr(item, key)
+                            for key in ("role", "start_date", "end_date")
+                        }
+                        for item in records
+                    ],
+                }
+            )
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
 
 
 def source_hash(profile: Profile, catalogs: Catalogs) -> str:
     return hashlib.sha256(searchable_text(profile, catalogs).encode()).hexdigest()
 
+
+def current_embedding(record, profile, catalogs, provider):
+    return bool(
+        record
+        and record.get("status") == "ready"
+        and record.get("model") == provider.model
+        and record.get("dimensions") == provider.dimensions
+        and record.get("text_version") == TEXT_VERSION
+        and record.get("source_hash") == source_hash(profile, catalogs)
+    )

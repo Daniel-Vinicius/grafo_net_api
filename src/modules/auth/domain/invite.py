@@ -1,7 +1,7 @@
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
-import re
 
 from modules.auth.domain.errors import InvalidInviteError, ValidationError
 
@@ -10,7 +10,9 @@ def normalize_email(value: object) -> str:
     if not isinstance(value, str):
         raise ValidationError("E-mail deve ser texto")
     email = value.strip().lower()
-    if not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(insper\.edu\.br|al\.insper\.edu\.br)", email):
+    if not re.fullmatch(
+        r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(insper\.edu\.br|al\.insper\.edu\.br)", email
+    ):
         raise ValidationError("Informe um e-mail institucional do Insper")
     local = email.split("@")[0]
     if local.startswith(".") or local.endswith(".") or ".." in local:
@@ -37,4 +39,8 @@ class Invite:
             raise InvalidInviteError()
 
     def to_public(self) -> dict:
-        return {"id": self.id, "email": self.email, "expires_at": self.expires_at.isoformat()}
+        return {
+            "id": self.id,
+            "email": self.email,
+            "expires_at": self.expires_at.isoformat(),
+        }

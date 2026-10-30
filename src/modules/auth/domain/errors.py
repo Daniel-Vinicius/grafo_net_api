@@ -20,10 +20,6 @@ class BootstrapForbiddenError(Exception):
     pass
 
 
-class EmailDeliveryError(Exception):
-    pass
-
-
 class NotFoundError(Exception):
     pass
 
