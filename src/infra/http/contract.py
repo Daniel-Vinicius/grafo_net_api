@@ -64,6 +64,9 @@ from modules.graph.useCases.buildGraph.buildGraphUseCase import BuildGraphUseCas
 from modules.graph.useCases.getCloseNetwork.getCloseNetworkUseCase import (
     GetCloseNetworkUseCase,
 )
+from modules.graph.useCases.getNetworkStats.getNetworkStatsUseCase import (
+    GetNetworkStatsUseCase,
+)
 from modules.graph.useCases.getPath.getPathUseCase import GetPathUseCase
 from modules.search.useCases.indexProfiles.indexProfilesUseCase import (
     IndexProfilesUseCase,
@@ -103,6 +106,7 @@ class Actions:
     removeConnection: RemoveConnectionUseCase
     buildGraph: BuildGraphUseCase
     getCloseNetwork: GetCloseNetworkUseCase
+    getNetworkStats: GetNetworkStatsUseCase
     getPath: GetPathUseCase
     indexProfiles: IndexProfilesUseCase
     searchProfiles: SearchProfilesUseCase

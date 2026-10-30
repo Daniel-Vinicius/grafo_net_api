@@ -22,6 +22,20 @@ def create_routes(actions: Actions):
     def graph():
         return jsonify(actions.getCloseNetwork.execute(identity()))
 
+    @blueprint.get("/graph/stats")
+    @documented(
+        "Grafo",
+        "Consultar totais da rede",
+        response="NetworkStats",
+        body=None,
+        status=200,
+        public=False,
+        multipart=False,
+    )
+    @authenticated
+    def stats():
+        return jsonify(actions.getNetworkStats.execute())
+
     @blueprint.get("/graph/paths/<identifier>")
     @documented(
         "Grafo",

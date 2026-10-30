@@ -52,6 +52,8 @@ Assim, um caminho longo só de amizades precede um mais curto com vínculo conte
 Vínculos paralelos são preservados; empates são determinísticos. Não há limite de
 profundidade e caminhos não são persistidos.
 
+`GET /graph/stats` retorna `{"people": N}`, o total de perfis ativos na rede.
+
 `GET /graph` retorna amizades diretas. `GET /graph/paths/{id}` retorna `path` e
 `graph`. Sem caminho, `path` é null e os dois nós aparecem isolados. Destino
 inexistente/inativo retorna 404; origem igual ao destino retorna custo zero.

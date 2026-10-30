@@ -281,6 +281,7 @@ def schemas():
             ("nodes", "edges"),
         ),
         "PathResult": obj({"path": path, "graph": ref("Graph")}, ("path", "graph")),
+        "NetworkStats": obj({"people": {"type": "integer"}}, ("people",)),
         "SearchInput": obj(
             {
                 "query": {**string(4000), "minLength": 1},

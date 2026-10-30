@@ -63,6 +63,9 @@ from modules.graph.useCases.buildGraph.buildGraphUseCase import BuildGraphUseCas
 from modules.graph.useCases.getCloseNetwork.getCloseNetworkUseCase import (
     GetCloseNetworkUseCase,
 )
+from modules.graph.useCases.getNetworkStats.getNetworkStatsUseCase import (
+    GetNetworkStatsUseCase,
+)
 from modules.graph.useCases.getPath.getPathUseCase import GetPathUseCase
 from modules.search.useCases.indexProfiles.indexProfilesUseCase import (
     IndexProfilesUseCase,
@@ -107,6 +110,7 @@ def build_actions(
         removeConnection=RemoveConnectionUseCase(uow),
         buildGraph=graph,
         getCloseNetwork=GetCloseNetworkUseCase(graph),
+        getNetworkStats=GetNetworkStatsUseCase(graph),
         getPath=GetPathUseCase(graph),
         indexProfiles=index,
         searchProfiles=SearchProfilesUseCase(repos, provider, graph, min_score),
