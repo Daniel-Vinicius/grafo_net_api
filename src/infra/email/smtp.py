@@ -24,6 +24,11 @@ class SMTPEmailSender:
         self._use_tls = use_tls
 
     def send_invite(self, email: str, link: str, expires_at: datetime) -> None:
+        if not self._sender.strip():
+            raise EmailDeliveryError("Configure o remetente SMTP antes de enviar convites")
+        if bool(self._username) != bool(self._password):
+            raise EmailDeliveryError("Configure usuário e senha SMTP juntos")
+
         message = EmailMessage()
         message["Subject"] = "Seu convite para o GrafoNet"
         message["From"] = self._sender
