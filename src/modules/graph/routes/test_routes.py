@@ -21,6 +21,16 @@ def test_graph_returns_only_direct_friends(client, path_people, auth_headers):
     assert len(response.json["edges"]) == 1
 
 
+def test_stats_counts_people_in_the_network(client, path_people, auth_headers):
+    response = client.get("/graph/stats", headers=auth_headers(path_people))
+    assert response.status_code == 200
+    assert response.json == {"people": 4}
+
+
+def test_stats_requires_authentication(client):
+    assert client.get("/graph/stats").status_code == 401
+
+
 def test_path_contains_complete_intermediaries_and_edge_references(
     client, path_people, auth_headers
 ):
