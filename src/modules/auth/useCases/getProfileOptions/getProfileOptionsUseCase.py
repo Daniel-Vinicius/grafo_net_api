@@ -9,7 +9,7 @@ class GetProfileOptionsUseCase:
         return {
             "courses": COURSES,
             "fields": FIELDS,
-            "semesters": list(range(1, 9)),
+            "semesters": list(range(1, 11)),
             "statuses": STATUSES,
             "types": ["aluno", "alumni", "professor"],
         }

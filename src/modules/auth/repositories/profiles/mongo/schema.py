@@ -9,8 +9,6 @@ VALIDATOR = {
             "name",
             "course_id",
             "semester",
-            "field_id",
-            "bio",
             "photo_id",
             "entity_ids",
             "research_project_ids",
@@ -19,12 +17,29 @@ VALIDATOR = {
         "properties": {
             "_id": {"bsonType": "string", "minLength": 1},
             "name": {"bsonType": "string", "minLength": 1, "maxLength": 100},
-            "course_id": {"enum": ["computer-science", "economics", "law"]},
-            "semester": {"bsonType": "int", "minimum": 1, "maximum": 8},
-            "field_id": {
-                "enum": ["finance", "technology", "entrepreneurship", "cybersecurity"]
+            "course_id": {
+                "enum": [
+                    "administration",
+                    "computer-science",
+                    "law",
+                    "economics",
+                    "computer-engineering",
+                    "production-engineering",
+                    "mechanical-engineering",
+                    "mechatronic-engineering",
+                ]
             },
-            "bio": {"bsonType": "string", "minLength": 1, "maxLength": 500},
+            "semester": {"bsonType": "int", "minimum": 1, "maximum": 10},
+            "field_id": {
+                "enum": [
+                    "",
+                    "finance",
+                    "technology",
+                    "entrepreneurship",
+                    "cybersecurity",
+                ]
+            },
+            "bio": {"bsonType": "string", "maxLength": 500},
             "photo_id": {"bsonType": ["string", "null"]},
             "entity_ids": {
                 "bsonType": "array",

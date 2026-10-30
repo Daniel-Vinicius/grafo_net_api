@@ -119,8 +119,8 @@ class Profile:
     name: str
     course_id: str
     semester: int
-    field_id: str
-    bio: str
+    field_id: str = ""
+    bio: str = ""
     photo_id: str | None = None
     entity_ids: tuple[str, ...] = ()
     research_project_ids: tuple[str, ...] = ()
@@ -138,11 +138,15 @@ class Profile:
     def __post_init__(self):
         object.__setattr__(self, "id", text(self.id, "Id", 100))
         object.__setattr__(self, "name", text(self.name, "Nome", 100))
-        object.__setattr__(self, "bio", text(self.bio, "Bio", 500))
+        object.__setattr__(self, "bio", text(self.bio, "Bio", 500, True))
         catalog(self.course_id, COURSES, "Curso")
-        catalog(self.field_id, FIELDS, "Área")
-        if type(self.semester) is not int or not 1 <= self.semester <= 8:
-            raise ValidationError("Semestre deve ser inteiro de 1 a 8")
+        if self.field_id:
+            catalog(self.field_id, FIELDS, "Área")
+        maximum = next(
+            item["semesters"] for item in COURSES if item["id"] == self.course_id
+        )
+        if type(self.semester) is not int or not 1 <= self.semester <= maximum:
+            raise ValidationError(f"Semestre deve ser inteiro de 1 a {maximum}")
         if type(self.experiences_completed) is not bool:
             raise ValidationError("Conclusão das experiências deve ser booleana")
         if self.type not in ("", "aluno", "alumni", "professor"):
@@ -184,7 +188,9 @@ class Profile:
 
     @property
     def field(self) -> str:
-        return next(item["name"] for item in FIELDS if item["id"] == self.field_id)
+        return next(
+            (item["name"] for item in FIELDS if item["id"] == self.field_id), ""
+        )
 
     def with_changes(self, changes: dict) -> "Profile":
         values = dict(changes)

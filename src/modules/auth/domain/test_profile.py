@@ -22,6 +22,7 @@ def profile(**changes):
         {"semester": True},
         {"semester": 0},
         {"semester": 9},
+        {"course_id": "law", "semester": 9},
         {"name": " "},
         {"bio": "x" * 501},
         {"course_id": "bad"},
@@ -81,3 +82,12 @@ def test_participation_requires_official_link_and_valid_status():
         profile(research_participations=(item,))
     with pytest.raises(ValidationError):
         replace(item, status="invented")
+
+
+def test_engineering_course_accepts_tenth_semester():
+    assert profile(course_id="production-engineering", semester=10).semester == 10
+
+
+def test_field_and_bio_are_optional():
+    created = Profile("p", "Pessoa", "law", 2)
+    assert (created.field_id, created.bio, created.field) == ("", "", "")

@@ -58,18 +58,25 @@ def schemas():
             "readOnly": True,
         },
     }
+    field_ids = ["finance", "technology", "entrepreneurship", "cybersecurity"]
     basic = {
         "name": {**string(100), "minLength": 1},
         "course_id": {
             "type": "string",
-            "enum": ["computer-science", "economics", "law"],
+            "enum": [
+                "administration",
+                "computer-science",
+                "law",
+                "economics",
+                "computer-engineering",
+                "production-engineering",
+                "mechanical-engineering",
+                "mechatronic-engineering",
+            ],
         },
-        "semester": {"type": "integer", "minimum": 1, "maximum": 8},
-        "field_id": {
-            "type": "string",
-            "enum": ["finance", "technology", "entrepreneurship", "cybersecurity"],
-        },
-        "bio": {**string(500), "minLength": 1},
+        "semester": {"type": "integer", "minimum": 1, "maximum": 10},
+        "field_id": {"type": "string", "enum": ["", *field_ids]},
+        "bio": string(500),
     }
     metadata = {
         "entity_ids": array(string()),
@@ -94,7 +101,7 @@ def schemas():
         "title": {**string(150), "minLength": 1},
         "description": {**string(2000), "minLength": 1},
         "advisor": {**string(100), "minLength": 1},
-        "field_id": basic["field_id"],
+        "field_id": {"type": "string", "enum": field_ids},
         "start_date": date,
         "end_date": end,
         "status": {
@@ -133,6 +140,10 @@ def schemas():
         ("id", "email"),
     )
     option = obj({"id": string(), "name": string()}, ("id", "name"))
+    course_option = obj(
+        {"id": string(), "name": string(), "semesters": {"type": "integer"}},
+        ("id", "name", "semesters"),
+    )
     model = {
         "Error": obj({"message": string()}, ("message",)),
         "Health": obj({"status": {"type": "string", "enum": ["ok"]}}, ("status",)),
@@ -178,11 +189,11 @@ def schemas():
         "Experience": obj(experience, experience),
         "Membership": obj(membership, membership),
         "Participation": obj(participation, participation),
-        "ProfileInput": obj({**basic, **metadata}, basic),
+        "ProfileInput": obj({**basic, **metadata}, ("name", "course_id", "semester")),
         "ProfileUpdate": obj({**basic, **metadata}),
         "ProfileOptions": obj(
             {
-                "courses": array(option),
+                "courses": array(course_option),
                 "fields": array(option),
                 "semesters": array({"type": "integer"}),
                 "statuses": array(string()),

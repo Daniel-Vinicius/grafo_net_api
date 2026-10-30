@@ -53,11 +53,8 @@ def profile_input(identifier, data, existing=None):
     allowed = {item.name for item in fields(Profile)} - {"id", "photo_id"}
     if set(data) - allowed:
         raise ValidationError("Campos de perfil inválidos")
-    if (
-        existing is None
-        and not {"name", "course_id", "semester", "field_id", "bio"} <= data.keys()
-    ):
-        raise ValidationError("Informe nome, curso, semestre, área e bio")
+    if existing is None and not {"name", "course_id", "semester"} <= data.keys():
+        raise ValidationError("Informe nome, curso e semestre")
     changes = dict(data)
     for key in ("name", "bio", "class_group", "role", "company"):
         if key in changes:
@@ -65,7 +62,7 @@ def profile_input(identifier, data, existing=None):
                 changes[key],
                 key,
                 {"name": 100, "bio": 500}.get(key, 150),
-                key not in {"name", "bio"},
+                key != "name",
             )
     for key, kind in (
         ("experiences", Experience),

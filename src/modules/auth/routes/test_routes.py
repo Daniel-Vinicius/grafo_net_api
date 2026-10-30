@@ -56,6 +56,16 @@ def test_deactivated_user_cannot_use_existing_token(client, ana, auth_headers, r
     assert client.get("/auth/me", headers=headers).status_code == 401
 
 
+def test_registration_accepts_only_essential_profile_fields(client, invite, repos):
+    token, _ = invite()
+    payload = registration(token)
+    payload["profile"] = {"name": "Nova", "course_id": "law", "semester": 8}
+    response = client.post("/auth/register", json=payload)
+    assert response.status_code == 201
+    created = repos.network.get_active(response.json["id"])
+    assert (created.field_id, created.bio) == ("", "")
+
+
 def test_registration_creates_profile_consumes_invite_and_indexes(
     client, invite, repos
 ):
@@ -178,8 +188,10 @@ def test_mail_failure_removes_unused_invite(client, app, mailer, database):
 def test_profile_options_are_public(client):
     response = client.get("/profiles/options")
     assert response.status_code == 200 and response.json["semesters"] == list(
-        range(1, 9)
+        range(1, 11)
     )
+    courses = {item["id"]: item["semesters"] for item in response.json["courses"]}
+    assert courses["law"] == 8 and courses["mechanical-engineering"] == 10
     assert "professor" in response.json["types"]
 
 
