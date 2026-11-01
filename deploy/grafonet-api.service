@@ -1,0 +1,24 @@
+[Unit]
+Description=GrafoNet API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/grafonet/api/current
+Environment=PYTHONPATH=/opt/grafonet/api/current/src
+Environment=APPLICATION_ROOT=/api
+Environment=FRONTEND_URL=http://34.203.245.73
+ExecStart=/opt/grafonet/api/current/.venv/bin/gunicorn --chdir src --bind 127.0.0.1:8000 --workers 1 --worker-class gthread --threads 4 --timeout 60 --max-requests 1000 --max-requests-jitter 100 app:create_app()
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=65
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

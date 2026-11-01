@@ -21,6 +21,9 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.3",
 ]
+production = [
+    "gunicorn>=26.2.0",
+]
 
 [tool.pyright]
 include = ["src", "tests", "scripts"]

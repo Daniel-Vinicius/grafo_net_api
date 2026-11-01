@@ -9,12 +9,13 @@ from infra.http.schemas import schemas
 
 
 def register_documentation(app):
+    prefix = app.config["APPLICATION_ROOT"].rstrip("/")
     spec = APISpec(
         title="GrafoNet API",
         version="1.0.0",
         openapi_version="3.0.3",
         plugins=[FlaskPlugin()],
-        servers=[{"url": "/"}],
+        servers=[{"url": prefix or "/"}],
     )
     spec.components.security_scheme(
         "bearerAuth", {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
@@ -81,12 +82,13 @@ def register_documentation(app):
     app.register_blueprint(blueprint)
     app.register_blueprint(
         get_swaggerui_blueprint(
-            "/docs",
-            "/openapi.json",
+            f"{prefix}/docs",
+            f"{prefix}/openapi.json",
             config={
                 "app_name": "GrafoNet API",
                 "validatorUrl": None,
                 "persistAuthorization": False,
             },
-        )
+        ),
+        url_prefix="/docs",
     )

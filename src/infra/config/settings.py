@@ -21,6 +21,7 @@ def settings(overrides=None):
         "SMTP_USERNAME": os.getenv("SMTP_USERNAME"),
         "SMTP_PASSWORD": os.getenv("SMTP_PASSWORD"),
         "SMTP_USE_TLS": os.getenv("SMTP_USE_TLS", "true"),
+        "APPLICATION_ROOT": os.getenv("APPLICATION_ROOT", "/"),
         "FRONTEND_URL": os.getenv("FRONTEND_URL", "http://localhost:5173"),
         "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY") or None,
         "GEMINI_TIMEOUT": os.getenv("GEMINI_TIMEOUT", "15"),

@@ -96,8 +96,9 @@ referências por ID. Fotos são acessíveis aos usuários autenticados. A seleç
 texto para embeddings considera utilidade semântica, independentemente da
 visibilidade dos dados na interface.
 
-Detalhes: [arquitetura](docs/architecture.md), [contratos de rede](docs/network-api.md)
-e [operação e configuração](docs/development.md). As convenções para alterações e
+Detalhes: [arquitetura](docs/architecture.md), [contratos de rede](docs/network-api.md),
+[operação e configuração](docs/development.md)
+e [deploy no EC2](docs/deployment.md). As convenções para alterações e
 revisões estão em [AGENTS.md](AGENTS.md).
 
 ## Verificar

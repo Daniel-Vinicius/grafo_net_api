@@ -3,6 +3,8 @@ import re
 from openapi_schema_validator import OAS30Validator
 from openapi_spec_validator import validate
 
+from app import create_app
+
 
 def test_openapi_documents_every_business_operation(client, app):
     response = client.get("/openapi.json")
@@ -49,3 +51,19 @@ def test_search_response_matches_openapi(client, search_people, auth_headers):
     OAS30Validator(
         {"$ref": "#/components/schemas/SearchResult", "components": spec["components"]}
     ).validate(response.json)
+
+
+def test_documentation_uses_public_proxy_prefix(app):
+    mounted = create_app(
+        {**app.config, "APPLICATION_ROOT": "/api"},
+        app.extensions["application"],
+    ).test_client()
+    spec = mounted.get("/openapi.json")
+    assert spec.status_code == 200
+    assert spec.json is not None
+    assert spec.json["servers"] == [{"url": "/api"}]
+    response = mounted.get("/docs/")
+    assert response.status_code == 200
+    assert b"/api/openapi.json" in response.data
+    assert b"/api/docs/swagger-ui-bundle.js" in response.data
+    assert mounted.get("/docs/swagger-ui-bundle.js").status_code == 200

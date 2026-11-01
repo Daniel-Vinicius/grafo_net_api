@@ -11,6 +11,7 @@ aplicação não prepara o banco, insere dados ou faz requisições externas.
 | `MONGO_DB` | Nome do banco de desenvolvimento |
 | `JWT_SECRET_KEY` | Obrigatória, mínimo de 32 bytes |
 | `BOOTSTRAP_KEY` | Opcional, mínimo de 32 bytes; primeiro convite sem conta existente |
+| `APPLICATION_ROOT` | Prefixo público para documentação atrás de proxy; `/` |
 | `FRONTEND_URL` | Origem CORS e destino dos links; `http://localhost:5173` |
 | `SMTP_HOST` / `SMTP_PORT` | `smtp.sendgrid.net` / `587` |
 | `SMTP_FROM` | Obrigatório para enviar convites; sem remetente padrão |
