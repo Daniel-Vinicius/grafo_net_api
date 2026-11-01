@@ -64,7 +64,9 @@ Para receber convites localmente:
 docker compose up -d mailpit
 ```
 
-O Mailpit recebe SMTP em `127.0.0.1:1025`; visualize mensagens em
+Para usar o Mailpit no lugar do SendGrid, configure `SMTP_HOST=127.0.0.1`,
+`SMTP_PORT=1025`, `SMTP_USE_TLS=false`, `SMTP_FROM=grafonet@localhost`
+e deixe `SMTP_USERNAME` e `SMTP_PASSWORD` vazios. Visualize mensagens em
 <http://127.0.0.1:8025>. Sem seed, o primeiro convite usa `X-Bootstrap-Key` com o
 valor de `BOOTSTRAP_KEY` (mínimo de 32 bytes). Depois da primeira conta, convites
 exigem JWT.

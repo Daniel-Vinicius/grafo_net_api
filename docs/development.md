@@ -12,10 +12,10 @@ aplicação não prepara o banco, insere dados ou faz requisições externas.
 | `JWT_SECRET_KEY` | Obrigatória, mínimo de 32 bytes |
 | `BOOTSTRAP_KEY` | Opcional, mínimo de 32 bytes; primeiro convite sem conta existente |
 | `FRONTEND_URL` | Origem CORS e destino dos links; `http://localhost:5173` |
-| `SMTP_HOST` / `SMTP_PORT` | `127.0.0.1` / `1025` |
-| `SMTP_FROM` | `grafonet@insper.edu.br` |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.sendgrid.net` / `587` |
+| `SMTP_FROM` | Obrigatório para enviar convites; sem remetente padrão |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | Autenticação SMTP opcional |
-| `SMTP_USE_TLS` | `false`; use `true` para STARTTLS |
+| `SMTP_USE_TLS` | `true`; STARTTLS habilitado por padrão |
 | `GEMINI_API_KEY` | Necessária para indexação e busca real |
 | `GEMINI_TIMEOUT` | Tempo limite positivo em segundos; `15` |
 | `SEARCH_MIN_SCORE` | Corte de similaridade entre -1 e 1; `0.50` |
