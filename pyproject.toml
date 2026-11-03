@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=13.0.0",
     "pymongo>=4.19.0",
     "python-dotenv>=1.2.4",
+    "tzdata>=2026.6",
 ]
 
 [dependency-groups]
