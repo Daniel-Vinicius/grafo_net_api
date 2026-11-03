@@ -6,6 +6,21 @@ entre alunos, alumni e professores.
 
 Python 3.14 · Flask · MongoDB · uv · Gemini Embedding 2.
 
+## Produção na AWS
+
+- Frontend: <http://34.203.245.73>
+- API: <http://34.203.245.73/api>
+- Swagger: <http://34.203.245.73/api/docs/>
+- OpenAPI: <http://34.203.245.73/api/openapi.json>
+- Saúde: <http://34.203.245.73/api/health>
+
+O Nginx encaminha `/api/` ao Gunicorn, removendo o prefixo. As rotas Flask
+continuam sem `/api`. O serviço inicia com a máquina e usa o `.env` protegido
+no servidor. E-mails de produção usam SendGrid com STARTTLS; Mailpit é apenas
+para desenvolvimento. O acesso público atual usa HTTP.
+
+Atualização e recuperação: [guia de deploy](docs/deployment.md).
+
 ## Executar
 
 Instale [uv](https://docs.astral.sh/uv/) e configure um MongoDB com suporte a
@@ -43,7 +58,7 @@ limites e autenticação. Faça login e cole o `access_token` no botão **Author
 ## Contas de demonstração
 
 O comando `seed-dev` cria oito contas fictícias. Todas usam a senha
-`   ` e e-mail `<nome>.seed@al.insper.edu.br`.
+`GrafoNetDev!2026` e e-mail `<nome>.seed@al.insper.edu.br`.
 
 | Conta | E-mail | Cenário |
 |---|---|---|
