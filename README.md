@@ -43,7 +43,7 @@ limites e autenticação. Faça login e cole o `access_token` no botão **Author
 ## Contas de demonstração
 
 O comando `seed-dev` cria oito contas fictícias. Todas usam a senha
-`GrafoNetDev!2026` e e-mail `<nome>.seed@al.insper.edu.br`.
+`   ` e e-mail `<nome>.seed@al.insper.edu.br`.
 
 | Conta | E-mail | Cenário |
 |---|---|---|
