@@ -86,6 +86,11 @@ e deixe `SMTP_USERNAME` e `SMTP_PASSWORD` vazios. Visualize mensagens em
 valor de `BOOTSTRAP_KEY` (mínimo de 32 bytes). Depois da primeira conta, convites
 exigem JWT.
 
+A recuperação de senha usa o mesmo SMTP. `POST /auth/password-recovery` sempre
+responde de forma genérica para e-mails institucionais válidos, sem revelar se a
+conta existe. O link enviado dura 30 minutos, funciona uma única vez e a nova
+senha encerra todas as sessões anteriores.
+
 Para habilitar busca semântica, configure `GEMINI_API_KEY` e indexe os perfis:
 
 ```bash

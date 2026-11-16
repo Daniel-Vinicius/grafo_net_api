@@ -23,7 +23,7 @@ class SMTPEmailSender:
         self._password = password
         self._use_tls = use_tls
 
-    def send_invite(self, email: str, link: str, expires_at: datetime) -> None:
+    def _send(self, message: EmailMessage) -> None:
         if not self._sender.strip():
             raise EmailDeliveryError(
                 "Configure o remetente SMTP antes de enviar convites"
@@ -31,6 +31,17 @@ class SMTPEmailSender:
         if bool(self._username) != bool(self._password):
             raise EmailDeliveryError("Configure usuário e senha SMTP juntos")
 
+        try:
+            with smtplib.SMTP(self._host, self._port, timeout=10) as smtp:
+                if self._use_tls:
+                    smtp.starttls(context=ssl.create_default_context())
+                if self._username:
+                    smtp.login(self._username, self._password or "")
+                smtp.send_message(message)
+        except OSError, smtplib.SMTPException:
+            raise EmailDeliveryError("Não foi possível enviar o e-mail") from None
+
+    def send_invite(self, email: str, link: str, expires_at: datetime) -> None:
         message = EmailMessage()
         message["Subject"] = "Seu convite para o GrafoNet"
         message["From"] = self._sender
@@ -40,12 +51,16 @@ class SMTPEmailSender:
             f"O convite vale por sete dias, até {expires_at.isoformat()}.\n"
             "Ele será consumido somente após concluir o cadastro.\n"
         )
-        try:
-            with smtplib.SMTP(self._host, self._port, timeout=10) as smtp:
-                if self._use_tls:
-                    smtp.starttls(context=ssl.create_default_context())
-                if self._username:
-                    smtp.login(self._username, self._password or "")
-                smtp.send_message(message)
-        except OSError, smtplib.SMTPException:
-            raise EmailDeliveryError("Não foi possível enviar o convite") from None
+        self._send(message)
+
+    def send_password_reset(self, email: str, link: str, expires_at: datetime) -> None:
+        message = EmailMessage()
+        message["Subject"] = "Redefina sua senha do GrafoNet"
+        message["From"] = self._sender
+        message["To"] = email
+        message.set_content(
+            "Recebemos uma solicitação para redefinir sua senha do GrafoNet.\n\n"
+            f"{link}\n\nO link vale por 30 minutos, até {expires_at.isoformat()}.\n"
+            "Se você não fez esta solicitação, ignore este e-mail.\n"
+        )
+        self._send(message)

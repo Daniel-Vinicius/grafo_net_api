@@ -60,6 +60,11 @@ class FakeMailer:
             raise EmailDeliveryError("E-mail indisponível")
         self.messages.append((email, link, expires_at))
 
+    def send_password_reset(self, email, link, expires_at):
+        if self.fail:
+            raise EmailDeliveryError("E-mail indisponível")
+        self.messages.append((email, link, expires_at))
+
 
 class FakeEmbeddings:
     model = "test"

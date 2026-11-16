@@ -5,6 +5,7 @@ from threading import RLock
 from typing import Any
 
 from modules.auth.domain.invite import Invite
+from modules.auth.domain.password_reset import PasswordReset
 from modules.auth.domain.profile import Profile
 from modules.auth.domain.research_project import ResearchProject
 from modules.auth.domain.user import User
@@ -16,6 +17,7 @@ class MemoryDatabase:
     users: dict[str, User] = field(default_factory=dict)
     profiles: dict[str, Profile] = field(default_factory=dict)
     invites: dict[str, Invite] = field(default_factory=dict)
+    password_resets: dict[str, PasswordReset] = field(default_factory=dict)
     tokens: dict[str, datetime] = field(default_factory=dict)
     entities: dict[str, dict] = field(default_factory=dict)
     projects: dict[str, ResearchProject] = field(default_factory=dict)

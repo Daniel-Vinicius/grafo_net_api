@@ -154,6 +154,14 @@ def schemas():
         "LoginResult": obj(
             {"access_token": string(), "user": ref("User")}, ("access_token", "user")
         ),
+        "PasswordRecoveryInput": obj({"email": string()}, ("email",)),
+        "PasswordResetInput": obj(
+            {
+                "token": string(),
+                "new_password": {**string(), "minLength": 8},
+            },
+            ("token", "new_password"),
+        ),
         "RegisterInput": obj(
             {
                 "profile": ref("ProfileInput"),

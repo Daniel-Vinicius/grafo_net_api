@@ -54,6 +54,35 @@ def create_routes(actions: Actions, tokens: TokenIssuer):
     def register():
         return jsonify(actions.register.execute(json_body())), 201
 
+    @blueprint.post("/auth/password-recovery")
+    @documented(
+        "Autenticação",
+        "Solicitar recuperação de senha",
+        response=None,
+        body="PasswordRecoveryInput",
+        status=202,
+        public=True,
+        multipart=False,
+    )
+    def password_recovery():
+        data = json_body({"email"})
+        actions.requestPasswordReset.execute(data.get("email"))
+        return "", 202
+
+    @blueprint.post("/auth/password-reset")
+    @documented(
+        "Autenticação",
+        "Redefinir senha com link de recuperação",
+        response=None,
+        body="PasswordResetInput",
+        status=204,
+        public=True,
+        multipart=False,
+    )
+    def password_reset():
+        actions.resetPassword.execute(json_body())
+        return "", 204
+
     @blueprint.post("/auth/logout")
     @documented(
         "Autenticação",

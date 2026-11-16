@@ -10,3 +10,6 @@ class EmailDeliveryError(UnavailableError):
 
 class EmailSender(Protocol):
     def send_invite(self, email: str, link: str, expires_at: datetime) -> None: ...
+    def send_password_reset(
+        self, email: str, link: str, expires_at: datetime
+    ) -> None: ...

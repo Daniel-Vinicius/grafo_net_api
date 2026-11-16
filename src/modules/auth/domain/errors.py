@@ -7,6 +7,11 @@ class InvalidInviteError(ValidationError):
         super().__init__("Convite inválido ou expirado")
 
 
+class InvalidPasswordResetError(ValidationError):
+    def __init__(self):
+        super().__init__("Link de recuperação inválido ou expirado")
+
+
 class DuplicateEmailError(Exception):
     def __init__(self):
         super().__init__("E-mail já cadastrado")

@@ -37,6 +37,12 @@ from modules.auth.useCases.listResearchProjects.listResearchProjectsUseCase impo
 from modules.auth.useCases.login.loginUseCase import LoginUseCase
 from modules.auth.useCases.logout.logoutUseCase import LogoutUseCase
 from modules.auth.useCases.register.registerUseCase import RegisterUseCase
+from modules.auth.useCases.requestPasswordReset.requestPasswordResetUseCase import (
+    RequestPasswordResetUseCase,
+)
+from modules.auth.useCases.resetPassword.resetPasswordUseCase import (
+    ResetPasswordUseCase,
+)
 from modules.auth.useCases.reviewResearchParticipation.reviewResearchParticipationUseCase import (
     ReviewResearchParticipationUseCase,
 )
@@ -86,6 +92,8 @@ def build_actions(
         logout=LogoutUseCase(repos),
         getCurrentUser=GetCurrentUserUseCase(),
         register=RegisterUseCase(uow, hasher, index),
+        requestPasswordReset=RequestPasswordResetUseCase(uow, mailer, frontend),
+        resetPassword=ResetPasswordUseCase(uow, hasher),
         issueInvitation=IssueInvitationUseCase(uow, mailer, frontend, bootstrap),
         getProfileOptions=GetProfileOptionsUseCase(),
         getProfile=GetProfileUseCase(repos),

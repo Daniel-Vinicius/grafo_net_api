@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from modules.auth.repositories.entities.contract import EntityRepository
 from modules.auth.repositories.invites.contract import InviteRepository
+from modules.auth.repositories.passwordResets.contract import PasswordResetRepository
 from modules.auth.repositories.photoCleanup.contract import PhotoCleanupRepository
 from modules.auth.repositories.photos.contract import PhotoRepository
 from modules.auth.repositories.profiles.contract import ProfileRepository
@@ -20,6 +21,7 @@ class Repositories:
     users: UserRepository
     tokens: TokenRepository
     invites: InviteRepository
+    password_resets: PasswordResetRepository
     profiles: ProfileRepository
     entities: EntityRepository
     projects: ResearchProjectRepository

@@ -7,6 +7,12 @@ from modules.auth.repositories.invites.in_memory.repository import (
     InMemoryInviteRepository,
 )
 from modules.auth.repositories.invites.mongo.repository import MongoInviteRepository
+from modules.auth.repositories.passwordResets.in_memory.repository import (
+    InMemoryPasswordResetRepository,
+)
+from modules.auth.repositories.passwordResets.mongo.repository import (
+    MongoPasswordResetRepository,
+)
 from modules.auth.repositories.photoCleanup.in_memory.repository import (
     InMemoryPhotoCleanupRepository,
 )
@@ -58,6 +64,7 @@ def mongo_repositories(database, session=None):
         users=MongoUserRepository(database, session),
         tokens=MongoTokenRepository(database, session),
         invites=MongoInviteRepository(database, session),
+        password_resets=MongoPasswordResetRepository(database, session),
         profiles=MongoProfileRepository(database, session),
         entities=MongoEntityRepository(database, session),
         projects=MongoResearchProjectRepository(database, session),
@@ -74,6 +81,7 @@ def memory_repositories(database):
         users=InMemoryUserRepository(database),
         tokens=InMemoryTokenRepository(database),
         invites=InMemoryInviteRepository(database),
+        password_resets=InMemoryPasswordResetRepository(database),
         profiles=InMemoryProfileRepository(database),
         entities=InMemoryEntityRepository(database),
         projects=InMemoryResearchProjectRepository(database),

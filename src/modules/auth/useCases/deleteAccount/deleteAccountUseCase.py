@@ -49,6 +49,7 @@ class DeleteAccountUseCase:
                     )
                 )
             repos.embeddings.delete(user.id)
+            repos.password_resets.delete_for_user(user.id)
             repos.profiles.delete(user.id)
             repos.users.delete(user.id)
 

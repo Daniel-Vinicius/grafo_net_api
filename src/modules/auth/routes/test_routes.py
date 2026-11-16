@@ -1,11 +1,14 @@
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from urllib.parse import parse_qs, urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from PIL import Image
 
+from modules.auth.domain.invite import token_hash
+from modules.auth.domain.password_reset import PasswordReset
 from modules.auth.domain.profile import EntityMembership, Profile
 from tests.support.fixtures import PASSWORD, PROFILE, PROJECT, image_bytes
 
@@ -36,6 +39,108 @@ def test_login_rejects_invalid_password(client, ana, password, status):
         ).status_code
         == status
     )
+
+
+def recovery_token(mailer):
+    return parse_qs(urlsplit(mailer.messages[-1][1]).query)["token"][0]
+
+
+def test_password_recovery_resets_password_and_invalidates_sessions(
+    client, ana, auth_headers, mailer, repos
+):
+    previous_session = auth_headers(ana)
+    response = client.post("/auth/password-recovery", json={"email": ana.email})
+    assert response.status_code == 202 and len(mailer.messages) == 1
+    token = recovery_token(mailer)
+    assert urlsplit(mailer.messages[0][1]).path == "/reset-password"
+    new_password = "nova-senha-segura"
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": token, "new_password": new_password},
+    )
+    assert response.status_code == 204
+    assert client.get("/auth/me", headers=previous_session).status_code == 401
+    assert (
+        client.post(
+            "/auth/login", json={"email": ana.email, "password": PASSWORD}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/auth/login", json={"email": ana.email, "password": new_password}
+        ).status_code
+        == 200
+    )
+    assert repos.password_resets.get_hash(token_hash(token)) is None
+
+
+def test_password_recovery_does_not_reveal_unknown_account(client, mailer):
+    response = client.post(
+        "/auth/password-recovery", json={"email": "desconhecido@insper.edu.br"}
+    )
+    assert response.status_code == 202 and mailer.messages == []
+
+
+def test_password_recovery_limits_repeated_email(client, ana, mailer):
+    for _ in range(2):
+        assert (
+            client.post(
+                "/auth/password-recovery", json={"email": ana.email}
+            ).status_code
+            == 202
+        )
+    assert len(mailer.messages) == 1
+
+
+def test_password_recovery_mail_failure_discards_token(client, ana, mailer, database):
+    mailer.fail = True
+    response = client.post("/auth/password-recovery", json={"email": ana.email})
+    assert response.status_code == 503 and database.password_resets == {}
+
+
+def test_password_reset_rejects_expired_link(client, ana, repos):
+    token = "a" * 43
+    now = datetime.now(timezone.utc)
+    repos.password_resets.save(
+        PasswordReset(
+            str(uuid4()),
+            ana.id,
+            token_hash(token),
+            now - timedelta(hours=1),
+            now - timedelta(minutes=30),
+        )
+    )
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": token, "new_password": "nova-senha-segura"},
+    )
+    assert (
+        response.status_code == 400
+        and "inválido ou expirado" in response.json["message"]
+    )
+
+
+@pytest.mark.parametrize(
+    "token,password",
+    [("inválido", "nova-senha-segura"), ("a" * 43, "curta")],
+)
+def test_password_reset_rejects_invalid_input(client, token, password):
+    assert (
+        client.post(
+            "/auth/password-reset",
+            json={"token": token, "new_password": password},
+        ).status_code
+        == 400
+    )
+
+
+def test_password_reset_link_is_single_use(client, ana, mailer):
+    client.post("/auth/password-recovery", json={"email": ana.email})
+    token = recovery_token(mailer)
+    payload = {"token": token, "new_password": "nova-senha-segura"}
+    assert client.post("/auth/password-reset", json=payload).status_code == 204
+    assert client.post("/auth/password-reset", json=payload).status_code == 400
 
 
 def test_me_returns_authenticated_identity(client, ana, auth_headers):

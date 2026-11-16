@@ -1,5 +1,6 @@
 from modules.auth.repositories.entities.mongo import schema as entities
 from modules.auth.repositories.invites.mongo import schema as invites
+from modules.auth.repositories.passwordResets.mongo import schema as password_resets
 from modules.auth.repositories.photoCleanup.mongo import schema as cleanup
 from modules.auth.repositories.profiles.mongo import schema as profiles
 from modules.auth.repositories.researchProjects.mongo import schema as projects
@@ -12,6 +13,7 @@ SCHEMAS = {
     "users": users,
     "revoked_tokens": tokens,
     "invites": invites,
+    "password_resets": password_resets,
     "profiles": profiles,
     "entities": entities,
     "research_projects": projects,

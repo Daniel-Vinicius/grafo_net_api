@@ -38,6 +38,12 @@ from modules.auth.useCases.listResearchProjects.listResearchProjectsUseCase impo
 from modules.auth.useCases.login.loginUseCase import LoginUseCase
 from modules.auth.useCases.logout.logoutUseCase import LogoutUseCase
 from modules.auth.useCases.register.registerUseCase import RegisterUseCase
+from modules.auth.useCases.requestPasswordReset.requestPasswordResetUseCase import (
+    RequestPasswordResetUseCase,
+)
+from modules.auth.useCases.resetPassword.resetPasswordUseCase import (
+    ResetPasswordUseCase,
+)
 from modules.auth.useCases.reviewResearchParticipation.reviewResearchParticipationUseCase import (
     ReviewResearchParticipationUseCase,
 )
@@ -82,6 +88,8 @@ class Actions:
     logout: LogoutUseCase
     getCurrentUser: GetCurrentUserUseCase
     register: RegisterUseCase
+    requestPasswordReset: RequestPasswordResetUseCase
+    resetPassword: ResetPasswordUseCase
     issueInvitation: IssueInvitationUseCase
     getProfileOptions: GetProfileOptionsUseCase
     getProfile: GetProfileUseCase
