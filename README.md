@@ -6,7 +6,7 @@ entre alunos, alumni e professores.
 
 Python 3.14 · Flask · MongoDB · uv · Gemini Embedding 2.
 
-## Produção na AWS
+## Deploy de demonstração (AWS) - Base de seed
 
 - Frontend: <http://34.203.245.73>
 - API: <http://34.203.245.73/api>
